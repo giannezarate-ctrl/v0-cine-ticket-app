@@ -57,7 +57,7 @@ export function MovieCard({ movie }: MovieCardProps) {
           </span>
           <span className="flex items-center gap-1">
             <Star className="h-3.5 w-3.5 fill-cinema-gold text-cinema-gold" />
-            {(Math.random() * 2 + 7).toFixed(1)}
+            {movie.score?.toFixed(1) || '8.5'}
           </span>
         </div>
 
