@@ -1,21 +1,60 @@
 'use client'
 
-import { use } from 'react'
+import { use, useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Header } from '@/components/header'
 import { SeatSelector } from '@/components/seat-selector'
-import { peliculas, funciones, formatearPrecio } from '@/lib/data'
 import { Clock, Calendar, ArrowLeft, Star, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { useState } from 'react'
+import { Spinner } from '@/components/ui/spinner'
+import type { Movie, Showtime } from '@/lib/db'
 
 export default function MovieDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const movie = peliculas.find(p => p.id === id)
-  const movieFunctions = funciones.filter(f => f.peliculaId === id)
-  const [selectedFunction, setSelectedFunction] = useState<string | null>(null)
+  const [movie, setMovie] = useState<Movie | null>(null)
+  const [showtimes, setShowtimes] = useState<Showtime[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedShowtime, setSelectedShowtime] = useState<Showtime | null>(null)
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [movieRes, showtimesRes] = await Promise.all([
+          fetch(`/api/movies/${id}`),
+          fetch(`/api/showtimes?movieId=${id}`)
+        ])
+        
+        if (movieRes.ok) {
+          const movieData = await movieRes.json()
+          setMovie(movieData)
+        }
+        
+        if (showtimesRes.ok) {
+          const showtimesData = await showtimesRes.json()
+          setShowtimes(showtimesData)
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchData()
+  }, [id])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto flex min-h-[60vh] items-center justify-center px-4">
+          <Spinner className="h-8 w-8 text-primary" />
+        </div>
+      </div>
+    )
+  }
 
   if (!movie) {
     return (
@@ -31,7 +70,18 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
     )
   }
 
-  const selectedFunctionData = movieFunctions.find(f => f.id === selectedFunction)
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0
+    }).format(price)
+  }
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -40,8 +90,8 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
       {/* Hero Banner */}
       <div className="relative h-[40vh] overflow-hidden md:h-[50vh]">
         <Image
-          src={movie.imagenUrl}
-          alt={movie.titulo}
+          src={movie.poster_url}
+          alt={movie.title}
           fill
           className="object-cover"
           priority
@@ -62,8 +112,8 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
             {/* Poster */}
             <div className="relative mx-auto aspect-[2/3] w-48 overflow-hidden rounded-xl shadow-2xl md:mx-0 md:w-full">
               <Image
-                src={movie.imagenUrl}
-                alt={movie.titulo}
+                src={movie.poster_url}
+                alt={movie.title}
                 fill
                 className="object-cover"
               />
@@ -73,16 +123,16 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
             <div className="flex flex-col gap-6">
               <div>
                 <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <Badge className="bg-primary text-primary-foreground">{movie.clasificacion}</Badge>
-                  <Badge variant="secondary">{movie.genero}</Badge>
+                  <Badge className="bg-primary text-primary-foreground">{movie.rating}</Badge>
+                  <Badge variant="secondary">{movie.genre}</Badge>
                 </div>
                 <h1 className="mb-4 text-3xl font-bold text-foreground md:text-4xl lg:text-5xl">
-                  {movie.titulo}
+                  {movie.title}
                 </h1>
                 <div className="flex flex-wrap items-center gap-4 text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <Clock className="h-4 w-4" />
-                    {movie.duracion} minutos
+                    {movie.duration} minutos
                   </span>
                   <span className="flex items-center gap-1.5">
                     <Star className="h-4 w-4 fill-cinema-gold text-cinema-gold" />
@@ -96,7 +146,7 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
               </div>
 
               <p className="max-w-2xl text-pretty leading-relaxed text-muted-foreground">
-                {movie.descripcion}
+                {movie.synopsis}
               </p>
 
               {/* Functions Selection */}
@@ -106,22 +156,23 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
                   Selecciona una función
                 </h3>
                 
-                {movieFunctions.length > 0 ? (
+                {showtimes.length > 0 ? (
                   <div className="flex flex-wrap gap-3">
-                    {movieFunctions.map((funcion) => (
+                    {showtimes.map((showtime) => (
                       <button
-                        key={funcion.id}
-                        onClick={() => setSelectedFunction(funcion.id)}
+                        key={showtime.id}
+                        onClick={() => setSelectedShowtime(showtime)}
                         className={`group flex flex-col items-center gap-1 rounded-lg border p-4 transition-all ${
-                          selectedFunction === funcion.id
+                          selectedShowtime?.id === showtime.id
                             ? 'border-primary bg-primary/10 text-primary'
                             : 'border-border bg-card text-foreground hover:border-primary/50'
                         }`}
                       >
-                        <span className="text-sm text-muted-foreground">{funcion.sala}</span>
-                        <span className="text-xl font-bold">{funcion.hora}</span>
+                        <span className="text-xs text-muted-foreground">{formatDate(showtime.show_date)}</span>
+                        <span className="text-sm text-muted-foreground">{showtime.room_name}</span>
+                        <span className="text-xl font-bold">{showtime.show_time}</span>
                         <span className="text-sm font-medium text-cinema-gold">
-                          {formatearPrecio(funcion.precio)}
+                          {formatPrice(showtime.price)}
                         </span>
                       </button>
                     ))}
@@ -135,9 +186,9 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
         </div>
 
         {/* Seat Selector */}
-        {selectedFunction && selectedFunctionData && (
+        {selectedShowtime && movie && (
           <SeatSelector 
-            funcion={selectedFunctionData} 
+            showtime={selectedShowtime} 
             movie={movie}
           />
         )}

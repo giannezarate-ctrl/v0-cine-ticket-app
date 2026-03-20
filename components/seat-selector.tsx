@@ -1,51 +1,128 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { 
-  generarAsientos, 
-  formatearPrecio, 
-  generarCodigoTiquete,
-  type Funcion,
-  type Movie,
-  type Asiento 
-} from '@/lib/data'
-import { ShoppingCart, Ticket, Check, Monitor } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { ShoppingCart, Ticket, Check, Monitor, Loader2 } from 'lucide-react'
 import { TicketModal } from './ticket-modal'
+import type { Movie, Showtime } from '@/lib/db'
 
 interface SeatSelectorProps {
-  funcion: Funcion
+  showtime: Showtime
   movie: Movie
 }
 
-export function SeatSelector({ funcion, movie }: SeatSelectorProps) {
-  const asientos = useMemo(() => generarAsientos(), [])
+interface OccupiedSeat {
+  seat_row: string
+  seat_number: number
+}
+
+export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
   const [selectedSeats, setSelectedSeats] = useState<string[]>([])
+  const [occupiedSeats, setOccupiedSeats] = useState<OccupiedSeat[]>([])
   const [showTicket, setShowTicket] = useState(false)
-  const [ticketCode, setTicketCode] = useState('')
+  const [ticketCodes, setTicketCodes] = useState<string[]>([])
+  const [customerName, setCustomerName] = useState('')
+  const [customerEmail, setCustomerEmail] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [purchasing, setPurchasing] = useState(false)
 
-  const toggleSeat = (asiento: Asiento) => {
-    if (asiento.estado === 'ocupado') return
+  const filas = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+  const columnas = Array.from({ length: 15 }, (_, i) => i + 1)
 
+  useEffect(() => {
+    async function fetchOccupiedSeats() {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/showtimes/${showtime.id}/seats`)
+        if (res.ok) {
+          const data = await res.json()
+          setOccupiedSeats(data)
+        }
+      } catch (error) {
+        console.error('Error fetching seats:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchOccupiedSeats()
+    setSelectedSeats([])
+  }, [showtime.id])
+
+  const isSeatOccupied = (row: string, col: number) => {
+    return occupiedSeats.some(s => s.seat_row === row && s.seat_number === col)
+  }
+
+  const toggleSeat = (row: string, col: number) => {
+    if (isSeatOccupied(row, col)) return
+
+    const seatId = `${row}${col}`
     setSelectedSeats(prev => 
-      prev.includes(asiento.id)
-        ? prev.filter(id => id !== asiento.id)
-        : [...prev, asiento.id]
+      prev.includes(seatId)
+        ? prev.filter(id => id !== seatId)
+        : [...prev, seatId]
     )
   }
 
-  const total = selectedSeats.length * funcion.precio
+  const total = selectedSeats.length * showtime.price
 
-  const handlePurchase = () => {
-    const code = generarCodigoTiquete()
-    setTicketCode(code)
-    setShowTicket(true)
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0
+    }).format(price)
   }
 
-  const filas = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })
+  }
+
+  const handlePurchase = async () => {
+    if (!customerName.trim() || !customerEmail.trim()) {
+      alert('Por favor ingresa tu nombre y correo electrónico')
+      return
+    }
+
+    setPurchasing(true)
+    try {
+      const seats = selectedSeats.map(seat => ({
+        row: seat.charAt(0),
+        number: parseInt(seat.slice(1))
+      }))
+
+      const res = await fetch('/api/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          showtime_id: showtime.id,
+          seats,
+          customer_name: customerName,
+          customer_email: customerEmail
+        })
+      })
+
+      if (res.ok) {
+        const tickets = await res.json()
+        setTicketCodes(tickets.map((t: { ticket_code: string }) => t.ticket_code))
+        setShowTicket(true)
+      } else {
+        const error = await res.json()
+        alert(error.error || 'Error al procesar la compra')
+      }
+    } catch (error) {
+      console.error('Error purchasing tickets:', error)
+      alert('Error al procesar la compra')
+    } finally {
+      setPurchasing(false)
+    }
+  }
 
   return (
     <section className="mb-16 rounded-2xl border border-border bg-card/50 p-6 md:p-8">
@@ -58,7 +135,7 @@ export function SeatSelector({ funcion, movie }: SeatSelectorProps) {
             Selecciona tus asientos
           </h2>
           <p className="text-sm text-muted-foreground">
-            {funcion.sala} - {funcion.hora}
+            {showtime.room_name} - {formatDate(showtime.show_date)} - {showtime.show_time}
           </p>
         </div>
       </div>
@@ -77,64 +154,71 @@ export function SeatSelector({ funcion, movie }: SeatSelectorProps) {
             </div>
           </div>
 
-          {/* Seats Grid */}
-          <div className="flex flex-col items-center gap-2">
-            {filas.map(fila => (
-              <div key={fila} className="flex items-center gap-2">
-                <span className="w-6 text-center text-sm font-medium text-muted-foreground">
-                  {fila}
-                </span>
-                <div className="flex gap-1">
-                  {asientos
-                    .filter(a => a.fila === fila)
-                    .map(asiento => {
-                      const isSelected = selectedSeats.includes(asiento.id)
-                      const isOccupied = asiento.estado === 'ocupado'
-                      
-                      return (
-                        <button
-                          key={asiento.id}
-                          onClick={() => toggleSeat(asiento)}
-                          disabled={isOccupied}
-                          className={`
-                            flex h-7 w-7 items-center justify-center rounded-t-lg text-xs font-medium transition-all
-                            md:h-8 md:w-8
-                            ${isOccupied 
-                              ? 'cursor-not-allowed bg-destructive/20 text-destructive/40' 
-                              : isSelected 
-                                ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30' 
-                                : 'bg-secondary text-secondary-foreground hover:bg-primary/20 hover:text-primary'
-                            }
-                          `}
-                          title={`${asiento.fila}${asiento.columna}`}
-                        >
-                          {asiento.columna}
-                        </button>
-                      )
-                    })}
-                </div>
-                <span className="w-6 text-center text-sm font-medium text-muted-foreground">
-                  {fila}
-                </span>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <>
+              {/* Seats Grid */}
+              <div className="flex flex-col items-center gap-2">
+                {filas.map(fila => (
+                  <div key={fila} className="flex items-center gap-2">
+                    <span className="w-6 text-center text-sm font-medium text-muted-foreground">
+                      {fila}
+                    </span>
+                    <div className="flex gap-1">
+                      {columnas.map(col => {
+                        const seatId = `${fila}${col}`
+                        const isSelected = selectedSeats.includes(seatId)
+                        const isOccupied = isSeatOccupied(fila, col)
+                        
+                        return (
+                          <button
+                            key={seatId}
+                            onClick={() => toggleSeat(fila, col)}
+                            disabled={isOccupied}
+                            className={`
+                              flex h-7 w-7 items-center justify-center rounded-t-lg text-xs font-medium transition-all
+                              md:h-8 md:w-8
+                              ${isOccupied 
+                                ? 'cursor-not-allowed bg-destructive/20 text-destructive/40' 
+                                : isSelected 
+                                  ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30' 
+                                  : 'bg-secondary text-secondary-foreground hover:bg-primary/20 hover:text-primary'
+                              }
+                            `}
+                            title={seatId}
+                          >
+                            {col}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <span className="w-6 text-center text-sm font-medium text-muted-foreground">
+                      {fila}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {/* Legend */}
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-6">
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded-t-lg bg-secondary" />
-              <span className="text-sm text-muted-foreground">Disponible</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded-t-lg bg-primary shadow-lg shadow-primary/30" />
-              <span className="text-sm text-muted-foreground">Seleccionado</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded-t-lg bg-destructive/20" />
-              <span className="text-sm text-muted-foreground">Ocupado</span>
-            </div>
-          </div>
+              {/* Legend */}
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-6">
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-t-lg bg-secondary" />
+                  <span className="text-sm text-muted-foreground">Disponible</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-t-lg bg-primary shadow-lg shadow-primary/30" />
+                  <span className="text-sm text-muted-foreground">Seleccionado</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-t-lg bg-destructive/20" />
+                  <span className="text-sm text-muted-foreground">Ocupado</span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Order Summary */}
@@ -147,11 +231,11 @@ export function SeatSelector({ funcion, movie }: SeatSelectorProps) {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <p className="font-semibold text-foreground">{movie.titulo}</p>
+              <p className="font-semibold text-foreground">{movie.title}</p>
               <p className="text-sm text-muted-foreground">
-                {funcion.fecha} - {funcion.hora}
+                {formatDate(showtime.show_date)} - {showtime.show_time}
               </p>
-              <p className="text-sm text-muted-foreground">{funcion.sala}</p>
+              <p className="text-sm text-muted-foreground">{showtime.room_name}</p>
             </div>
 
             <Separator />
@@ -177,10 +261,37 @@ export function SeatSelector({ funcion, movie }: SeatSelectorProps) {
 
             <Separator />
 
+            {/* Customer Info */}
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="name" className="text-foreground">Nombre</Label>
+                <Input
+                  id="name"
+                  placeholder="Tu nombre completo"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="email" className="text-foreground">Correo electrónico</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="tu@email.com"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            <Separator />
+
             <div className="space-y-2">
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>Precio por tiquete</span>
-                <span>{formatearPrecio(funcion.precio)}</span>
+                <span>{formatPrice(showtime.price)}</span>
               </div>
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>Cantidad</span>
@@ -189,18 +300,22 @@ export function SeatSelector({ funcion, movie }: SeatSelectorProps) {
               <Separator />
               <div className="flex justify-between text-lg font-bold text-foreground">
                 <span>Total</span>
-                <span className="text-cinema-gold">{formatearPrecio(total)}</span>
+                <span className="text-cinema-gold">{formatPrice(total)}</span>
               </div>
             </div>
 
             <Button 
               className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
               size="lg"
-              disabled={selectedSeats.length === 0}
+              disabled={selectedSeats.length === 0 || purchasing}
               onClick={handlePurchase}
             >
-              <Check className="mr-2 h-5 w-5" />
-              Confirmar Compra
+              {purchasing ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-5 w-5" />
+              )}
+              {purchasing ? 'Procesando...' : 'Confirmar Compra'}
             </Button>
           </CardContent>
         </Card>
@@ -212,12 +327,19 @@ export function SeatSelector({ funcion, movie }: SeatSelectorProps) {
         onClose={() => {
           setShowTicket(false)
           setSelectedSeats([])
+          setCustomerName('')
+          setCustomerEmail('')
+          // Refresh occupied seats
+          fetch(`/api/showtimes/${showtime.id}/seats`)
+            .then(res => res.json())
+            .then(data => setOccupiedSeats(data))
         }}
-        ticketCode={ticketCode}
+        ticketCodes={ticketCodes}
         movie={movie}
-        funcion={funcion}
+        showtime={showtime}
         seats={selectedSeats}
         total={total}
+        customerName={customerName}
       />
     </section>
   )

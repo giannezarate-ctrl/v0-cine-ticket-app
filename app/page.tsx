@@ -1,11 +1,20 @@
 import { Header } from '@/components/header'
 import { HeroSection } from '@/components/hero-section'
 import { MovieCard } from '@/components/movie-card'
-import { peliculas } from '@/lib/data'
+import { sql, Movie } from '@/lib/db'
 import { Film } from 'lucide-react'
 
-export default function HomePage() {
-  const peliculasActivas = peliculas.filter(p => p.estado === 'activa')
+async function getMovies(): Promise<Movie[]> {
+  const movies = await sql`
+    SELECT * FROM movies 
+    WHERE is_active = true 
+    ORDER BY release_date DESC
+  `
+  return movies as Movie[]
+}
+
+export default async function HomePage() {
+  const movies = await getMovies()
 
   return (
     <div className="min-h-screen bg-background">
@@ -29,11 +38,18 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {peliculasActivas.map((movie) => (
-              <MovieCard key={movie.id} movie={movie} />
-            ))}
-          </div>
+          {movies.length > 0 ? (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {movies.map((movie) => (
+                <MovieCard key={movie.id} movie={movie} />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16">
+              <Film className="mb-4 h-12 w-12 text-muted-foreground" />
+              <p className="text-lg text-muted-foreground">No hay películas disponibles</p>
+            </div>
+          )}
         </section>
 
         {/* Features Section */}

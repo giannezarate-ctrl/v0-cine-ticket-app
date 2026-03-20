@@ -9,33 +9,48 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { formatearPrecio, type Funcion, type Movie } from '@/lib/data'
+import type { Movie, Showtime } from '@/lib/db'
 import { CheckCircle2, Download, Copy, Film } from 'lucide-react'
 import { useState } from 'react'
 
 interface TicketModalProps {
   open: boolean
   onClose: () => void
-  ticketCode: string
+  ticketCodes: string[]
   movie: Movie
-  funcion: Funcion
+  showtime: Showtime
   seats: string[]
   total: number
+  customerName: string
 }
 
 export function TicketModal({
   open,
   onClose,
-  ticketCode,
+  ticketCodes,
   movie,
-  funcion,
+  showtime,
   seats,
   total,
+  customerName,
 }: TicketModalProps) {
   const [copied, setCopied] = useState(false)
 
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0
+    }).format(price)
+  }
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })
+  }
+
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(ticketCode)
+    await navigator.clipboard.writeText(ticketCodes.join(', '))
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -64,12 +79,17 @@ export function TicketModal({
               <span className="text-xl font-bold text-foreground">CinePlex</span>
             </div>
 
+            <div className="mb-2 text-center">
+              <p className="text-sm text-muted-foreground">Cliente</p>
+              <p className="font-semibold text-foreground">{customerName}</p>
+            </div>
+
             <div className="mb-4 text-center">
-              <h3 className="text-lg font-bold text-foreground">{movie.titulo}</h3>
+              <h3 className="text-lg font-bold text-foreground">{movie.title}</h3>
               <p className="text-sm text-muted-foreground">
-                {funcion.fecha} - {funcion.hora}
+                {formatDate(showtime.show_date)} - {showtime.show_time}
               </p>
-              <p className="text-sm text-muted-foreground">{funcion.sala}</p>
+              <p className="text-sm text-muted-foreground">{showtime.room_name}</p>
             </div>
 
             <div className="mb-4 flex justify-center">
@@ -84,25 +104,33 @@ export function TicketModal({
 
             <Separator className="my-4 border-dashed" />
 
-            {/* Ticket Code */}
+            {/* Ticket Codes */}
             <div className="text-center">
               <p className="mb-2 text-xs uppercase tracking-widest text-muted-foreground">
-                Código del tiquete
+                {ticketCodes.length > 1 ? 'Códigos de los tiquetes' : 'Código del tiquete'}
               </p>
-              <div className="flex items-center justify-center gap-2">
-                <code className="rounded-lg bg-background px-4 py-2 font-mono text-lg font-bold tracking-wider text-primary">
-                  {ticketCode}
-                </code>
+              <div className="flex flex-col items-center gap-2">
+                {ticketCodes.map((code, index) => (
+                  <code key={index} className="rounded-lg bg-background px-4 py-2 font-mono text-lg font-bold tracking-wider text-primary">
+                    {code}
+                  </code>
+                ))}
                 <Button
                   variant="ghost"
-                  size="icon"
+                  size="sm"
                   onClick={handleCopy}
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  className="mt-2 text-muted-foreground hover:text-foreground"
                 >
                   {copied ? (
-                    <CheckCircle2 className="h-4 w-4 text-cinema-green" />
+                    <>
+                      <CheckCircle2 className="mr-2 h-4 w-4 text-cinema-green" />
+                      Copiado
+                    </>
                   ) : (
-                    <Copy className="h-4 w-4" />
+                    <>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copiar códigos
+                    </>
                   )}
                 </Button>
               </div>
@@ -112,7 +140,7 @@ export function TicketModal({
           {/* Total */}
           <div className="flex items-center justify-between rounded-lg bg-secondary/50 px-4 py-3">
             <span className="font-medium text-foreground">Total pagado</span>
-            <span className="text-xl font-bold text-cinema-gold">{formatearPrecio(total)}</span>
+            <span className="text-xl font-bold text-cinema-gold">{formatPrice(total)}</span>
           </div>
 
           {/* Instructions */}

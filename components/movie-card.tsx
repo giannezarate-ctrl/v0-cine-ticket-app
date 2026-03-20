@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Clock, Star, Calendar } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import type { Movie } from '@/lib/data'
+import type { Movie } from '@/lib/db'
 
 interface MovieCardProps {
   movie: Movie
@@ -17,8 +17,8 @@ export function MovieCard({ movie }: MovieCardProps) {
       {/* Poster Image */}
       <div className="relative aspect-[2/3] overflow-hidden">
         <Image
-          src={movie.imagenUrl}
-          alt={movie.titulo}
+          src={movie.poster_url}
+          alt={movie.title}
           fill
           className="object-cover transition-transform duration-500 group-hover:scale-105"
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
@@ -30,7 +30,7 @@ export function MovieCard({ movie }: MovieCardProps) {
         <Badge 
           className="absolute right-3 top-3 bg-background/90 text-foreground backdrop-blur-sm"
         >
-          {movie.clasificacion}
+          {movie.rating}
         </Badge>
 
         {/* Quick Actions - Appear on hover */}
@@ -47,13 +47,13 @@ export function MovieCard({ movie }: MovieCardProps) {
       {/* Movie Info */}
       <div className="p-4">
         <h3 className="mb-2 line-clamp-1 text-lg font-semibold text-foreground">
-          {movie.titulo}
+          {movie.title}
         </h3>
         
         <div className="mb-3 flex items-center gap-3 text-sm text-muted-foreground">
           <span className="flex items-center gap-1">
             <Clock className="h-3.5 w-3.5" />
-            {movie.duracion} min
+            {movie.duration} min
           </span>
           <span className="flex items-center gap-1">
             <Star className="h-3.5 w-3.5 fill-cinema-gold text-cinema-gold" />
@@ -62,7 +62,7 @@ export function MovieCard({ movie }: MovieCardProps) {
         </div>
 
         <Badge variant="secondary" className="bg-secondary text-secondary-foreground">
-          {movie.genero}
+          {movie.genre}
         </Badge>
       </div>
     </div>

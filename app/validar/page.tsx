@@ -8,36 +8,71 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Ticket, CheckCircle2, XCircle, AlertCircle, Search, QrCode } from 'lucide-react'
 
+interface TicketInfo {
+  id: number
+  ticket_code: string
+  customer_name: string
+  customer_email: string
+  seat_row: string
+  seat_number: number
+  movie_title: string
+  show_date: string
+  show_time: string
+  room_name: string
+  is_validated: boolean
+  validated_at: string | null
+}
+
 type ValidationStatus = 'idle' | 'valid' | 'used' | 'invalid'
 
 export default function ValidarPage() {
   const [code, setCode] = useState('')
   const [status, setStatus] = useState<ValidationStatus>('idle')
+  const [ticketInfo, setTicketInfo] = useState<TicketInfo | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })
+  }
 
   const handleValidate = async () => {
     if (!code.trim()) return
 
     setIsLoading(true)
+    setErrorMessage('')
     
-    // Simulate validation
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // Mock validation logic
-    if (code.startsWith('TKT-')) {
-      const random = Math.random()
-      if (random > 0.6) {
-        setStatus('valid')
-      } else if (random > 0.3) {
-        setStatus('used')
-      } else {
+    try {
+      const res = await fetch('/api/tickets/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket_code: code })
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
         setStatus('invalid')
+        setErrorMessage(data.error || 'Código no encontrado')
+        setTicketInfo(null)
+        return
       }
-    } else {
+
+      if (data.valid) {
+        setStatus('valid')
+        setTicketInfo(data.ticket)
+      } else {
+        setStatus('used')
+        setTicketInfo(data.ticket)
+      }
+    } catch (error) {
+      console.error('Error validating ticket:', error)
       setStatus('invalid')
+      setErrorMessage('Error al conectar con el servidor')
+    } finally {
+      setIsLoading(false)
     }
-    
-    setIsLoading(false)
   }
 
   const getStatusContent = () => {
@@ -57,6 +92,20 @@ export default function ValidarPage() {
             <Badge className="bg-cinema-green/20 text-cinema-green">
               Acceso Permitido
             </Badge>
+            
+            {ticketInfo && (
+              <div className="mt-4 w-full rounded-lg border border-border bg-card p-4 text-left">
+                <p className="font-semibold text-foreground">{ticketInfo.movie_title}</p>
+                <p className="text-sm text-muted-foreground">{formatDate(ticketInfo.show_date)} - {ticketInfo.show_time}</p>
+                <p className="text-sm text-muted-foreground">{ticketInfo.room_name}</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Cliente: <span className="text-foreground">{ticketInfo.customer_name}</span>
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Asiento: <span className="font-mono text-primary">{ticketInfo.seat_row}{ticketInfo.seat_number}</span>
+                </p>
+              </div>
+            )}
           </div>
         )
       case 'used':
@@ -74,6 +123,22 @@ export default function ValidarPage() {
             <Badge className="bg-accent/20 text-accent">
               Acceso Denegado
             </Badge>
+            
+            {ticketInfo && (
+              <div className="mt-4 w-full rounded-lg border border-border bg-card p-4 text-left">
+                <p className="font-semibold text-foreground">{ticketInfo.movie_title}</p>
+                <p className="text-sm text-muted-foreground">{formatDate(ticketInfo.show_date)} - {ticketInfo.show_time}</p>
+                <p className="text-sm text-muted-foreground">{ticketInfo.room_name}</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Cliente: <span className="text-foreground">{ticketInfo.customer_name}</span>
+                </p>
+                {ticketInfo.validated_at && (
+                  <p className="text-sm text-destructive">
+                    Validado: {new Date(ticketInfo.validated_at).toLocaleString('es-CO')}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )
       case 'invalid':
@@ -85,7 +150,7 @@ export default function ValidarPage() {
             <div className="text-center">
               <h3 className="text-2xl font-bold text-destructive">Tiquete Inválido</h3>
               <p className="mt-2 text-muted-foreground">
-                El código ingresado no corresponde a ningún tiquete válido en el sistema.
+                {errorMessage || 'El código ingresado no corresponde a ningún tiquete válido en el sistema.'}
               </p>
             </div>
             <Badge className="bg-destructive/20 text-destructive">
@@ -132,7 +197,7 @@ export default function ValidarPage() {
             <CardContent className="space-y-6">
               <div className="flex gap-3">
                 <Input
-                  placeholder="Ej: TKT-ABC12345"
+                  placeholder="Ej: A1B2C3D4"
                   value={code}
                   onChange={(e) => {
                     setCode(e.target.value.toUpperCase())
@@ -168,9 +233,9 @@ export default function ValidarPage() {
                 <div className="rounded-lg border border-border bg-muted/30 p-4">
                   <h4 className="mb-2 font-medium text-foreground">Formato del código</h4>
                   <ul className="space-y-1 text-sm text-muted-foreground">
-                    <li>El código comienza con TKT- seguido de 8 caracteres.</li>
-                    <li>Ejemplo: TKT-A1B2C3D4</li>
-                    <li>El código es único para cada compra.</li>
+                    <li>El código tiene 8 caracteres alfanuméricos.</li>
+                    <li>Ejemplo: A1B2C3D4</li>
+                    <li>El código es único para cada asiento comprado.</li>
                   </ul>
                 </div>
               )}
@@ -183,6 +248,7 @@ export default function ValidarPage() {
                   onClick={() => {
                     setCode('')
                     setStatus('idle')
+                    setTicketInfo(null)
                   }}
                 >
                   Validar otro tiquete

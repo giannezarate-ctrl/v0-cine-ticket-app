@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Header } from '@/components/header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -31,12 +31,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { peliculas, funciones, formatearPrecio } from '@/lib/data'
+import { Spinner } from '@/components/ui/spinner'
+import type { Movie, Showtime, Ticket, Room } from '@/lib/db'
 import { 
   LayoutDashboard, 
   Film, 
   Calendar, 
-  Ticket, 
+  Ticket as TicketIcon, 
   TrendingUp,
   Users,
   DollarSign,
@@ -44,18 +45,149 @@ import {
   Pencil,
   Trash2,
   BarChart3,
-  PieChart
+  PieChart,
+  RefreshCw
 } from 'lucide-react'
+
+interface Stats {
+  moviesCount: number
+  ticketsToday: number
+  totalRevenue: number
+  showtimesToday: number
+  recentTickets: Ticket[]
+  salesByMovie: { title: string; tickets_sold: number; revenue: number }[]
+}
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [movies, setMovies] = useState<Movie[]>([])
+  const [showtimes, setShowtimes] = useState<Showtime[]>([])
+  const [tickets, setTickets] = useState<Ticket[]>([])
+  const [rooms, setRooms] = useState<Room[]>([])
+  const [loading, setLoading] = useState(true)
+  
+  // Form states
+  const [newMovie, setNewMovie] = useState({
+    title: '', genre: '', duration: '', rating: '', synopsis: '', poster_url: '', release_date: ''
+  })
+  const [newShowtime, setNewShowtime] = useState({
+    movie_id: '', room_id: '', show_date: '', show_time: '', price: ''
+  })
+  const [movieDialogOpen, setMovieDialogOpen] = useState(false)
+  const [showtimeDialogOpen, setShowtimeDialogOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
 
-  // Mock stats
-  const stats = {
-    totalVentas: 2450000,
-    tiquetesVendidos: 156,
-    ocupacionPromedio: 68,
-    funcionesHoy: 10
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0
+    }).format(price)
+  }
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+  }
+
+  const fetchData = async () => {
+    setLoading(true)
+    try {
+      const [statsRes, moviesRes, showtimesRes, ticketsRes, roomsRes] = await Promise.all([
+        fetch('/api/stats'),
+        fetch('/api/movies'),
+        fetch('/api/showtimes'),
+        fetch('/api/tickets'),
+        fetch('/api/rooms')
+      ])
+
+      if (statsRes.ok) setStats(await statsRes.json())
+      if (moviesRes.ok) setMovies(await moviesRes.json())
+      if (showtimesRes.ok) setShowtimes(await showtimesRes.json())
+      if (ticketsRes.ok) setTickets(await ticketsRes.json())
+      if (roomsRes.ok) setRooms(await roomsRes.json())
+    } catch (error) {
+      console.error('Error fetching data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const handleAddMovie = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/movies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newMovie,
+          duration: parseInt(newMovie.duration)
+        })
+      })
+      
+      if (res.ok) {
+        setMovieDialogOpen(false)
+        setNewMovie({ title: '', genre: '', duration: '', rating: '', synopsis: '', poster_url: '', release_date: '' })
+        fetchData()
+      }
+    } catch (error) {
+      console.error('Error adding movie:', error)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAddShowtime = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/showtimes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newShowtime,
+          movie_id: parseInt(newShowtime.movie_id),
+          room_id: parseInt(newShowtime.room_id),
+          price: parseInt(newShowtime.price)
+        })
+      })
+      
+      if (res.ok) {
+        setShowtimeDialogOpen(false)
+        setNewShowtime({ movie_id: '', room_id: '', show_date: '', show_time: '', price: '' })
+        fetchData()
+      }
+    } catch (error) {
+      console.error('Error adding showtime:', error)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteMovie = async (id: number) => {
+    if (!confirm('¿Estás seguro de eliminar esta película?')) return
+    
+    try {
+      const res = await fetch(`/api/movies/${id}`, { method: 'DELETE' })
+      if (res.ok) fetchData()
+    } catch (error) {
+      console.error('Error deleting movie:', error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto flex min-h-[60vh] items-center justify-center">
+          <Spinner className="h-8 w-8 text-primary" />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -76,9 +208,15 @@ export default function AdminPage() {
               Gestiona películas, funciones y visualiza reportes de ventas
             </p>
           </div>
-          <Badge variant="outline" className="w-fit border-cinema-green/50 text-cinema-green">
-            Sistema Activo
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={fetchData} className="border-border">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Actualizar
+            </Button>
+            <Badge variant="outline" className="border-cinema-green/50 text-cinema-green">
+              Sistema Activo
+            </Badge>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -97,7 +235,7 @@ export default function AdminPage() {
               <span className="hidden sm:inline">Funciones</span>
             </TabsTrigger>
             <TabsTrigger value="ventas" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Ticket className="mr-2 h-4 w-4" />
+              <TicketIcon className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Ventas</span>
             </TabsTrigger>
           </TabsList>
@@ -115,10 +253,10 @@ export default function AdminPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-foreground">
-                    {formatearPrecio(stats.totalVentas)}
+                    {formatPrice(stats?.totalRevenue || 0)}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    <span className="text-cinema-green">+12%</span> vs. semana anterior
+                    Total acumulado
                   </p>
                 </CardContent>
               </Card>
@@ -126,16 +264,16 @@ export default function AdminPage() {
               <Card className="border-border bg-card">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Tiquetes Vendidos
+                    Tiquetes Hoy
                   </CardTitle>
-                  <Ticket className="h-4 w-4 text-primary" />
+                  <TicketIcon className="h-4 w-4 text-primary" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-foreground">
-                    {stats.tiquetesVendidos}
+                    {stats?.ticketsToday || 0}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    <span className="text-cinema-green">+8%</span> vs. semana anterior
+                    Vendidos hoy
                   </p>
                 </CardContent>
               </Card>
@@ -143,16 +281,16 @@ export default function AdminPage() {
               <Card className="border-border bg-card">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Ocupación Promedio
+                    Películas Activas
                   </CardTitle>
-                  <Users className="h-4 w-4 text-accent" />
+                  <Film className="h-4 w-4 text-accent" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-foreground">
-                    {stats.ocupacionPromedio}%
+                    {stats?.moviesCount || 0}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    De capacidad total
+                    En cartelera
                   </p>
                 </CardContent>
               </Card>
@@ -166,10 +304,10 @@ export default function AdminPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-foreground">
-                    {stats.funcionesHoy}
+                    {stats?.showtimesToday || 0}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    En 3 salas activas
+                    Programadas
                   </p>
                 </CardContent>
               </Card>
@@ -181,24 +319,31 @@ export default function AdminPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-foreground">
                     <BarChart3 className="h-5 w-5 text-primary" />
-                    Ventas por Día
+                    Ventas por Película
                   </CardTitle>
-                  <CardDescription>Últimos 7 días</CardDescription>
+                  <CardDescription>Top 5 películas más vendidas</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex h-[200px] items-end justify-between gap-2">
-                    {[65, 45, 78, 52, 90, 68, 85].map((value, i) => (
-                      <div key={i} className="flex flex-1 flex-col items-center gap-2">
-                        <div 
-                          className="w-full rounded-t bg-primary transition-all hover:bg-primary/80"
-                          style={{ height: `${value * 2}px` }}
-                        />
-                        <span className="text-xs text-muted-foreground">
-                          {['L', 'M', 'X', 'J', 'V', 'S', 'D'][i]}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  {stats?.salesByMovie && stats.salesByMovie.length > 0 ? (
+                    <div className="space-y-4">
+                      {stats.salesByMovie.map((item, index) => (
+                        <div key={index} className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-foreground truncate max-w-[200px]">{item.title}</span>
+                            <span className="text-muted-foreground">{item.tickets_sold} tiquetes</span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                            <div 
+                              className="h-full rounded-full bg-primary transition-all"
+                              style={{ width: `${Math.min((item.tickets_sold / 50) * 100, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">No hay datos de ventas aún</p>
+                  )}
                 </CardContent>
               </Card>
 
@@ -206,28 +351,19 @@ export default function AdminPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-foreground">
                     <PieChart className="h-5 w-5 text-accent" />
-                    Ocupación por Sala
+                    Salas Disponibles
                   </CardTitle>
-                  <CardDescription>Porcentaje de ocupación actual</CardDescription>
+                  <CardDescription>Estado de las salas del cine</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {[
-                      { sala: 'Sala 1', ocupacion: 75, color: 'bg-primary' },
-                      { sala: 'Sala 2', ocupacion: 62, color: 'bg-accent' },
-                      { sala: 'Sala 3', ocupacion: 88, color: 'bg-cinema-green' },
-                    ].map((item) => (
-                      <div key={item.sala} className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-foreground">{item.sala}</span>
-                          <span className="text-muted-foreground">{item.ocupacion}%</span>
+                    {rooms.map((room) => (
+                      <div key={room.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+                        <div>
+                          <p className="font-medium text-foreground">{room.name}</p>
+                          <p className="text-sm text-muted-foreground">{room.total_seats} asientos</p>
                         </div>
-                        <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                          <div 
-                            className={`h-full rounded-full ${item.color} transition-all`}
-                            style={{ width: `${item.ocupacion}%` }}
-                          />
-                        </div>
+                        <Badge className="bg-cinema-green/20 text-cinema-green">Activa</Badge>
                       </div>
                     ))}
                   </div>
@@ -242,34 +378,36 @@ export default function AdminPage() {
                 <CardDescription>Últimas transacciones realizadas</CardDescription>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-border hover:bg-transparent">
-                      <TableHead className="text-muted-foreground">Código</TableHead>
-                      <TableHead className="text-muted-foreground">Película</TableHead>
-                      <TableHead className="text-muted-foreground">Función</TableHead>
-                      <TableHead className="text-muted-foreground">Asientos</TableHead>
-                      <TableHead className="text-right text-muted-foreground">Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {[
-                      { codigo: 'TKT-A1B2C3D4', pelicula: 'Dune: Parte Dos', funcion: '20:30', asientos: 2, total: 36000 },
-                      { codigo: 'TKT-E5F6G7H8', pelicula: 'Oppenheimer', funcion: '19:00', asientos: 4, total: 72000 },
-                      { codigo: 'TKT-I9J0K1L2', pelicula: 'Guardianes del Tiempo', funcion: '16:00', asientos: 3, total: 36000 },
-                    ].map((venta) => (
-                      <TableRow key={venta.codigo} className="border-border">
-                        <TableCell className="font-mono text-primary">{venta.codigo}</TableCell>
-                        <TableCell className="text-foreground">{venta.pelicula}</TableCell>
-                        <TableCell className="text-muted-foreground">{venta.funcion}</TableCell>
-                        <TableCell className="text-muted-foreground">{venta.asientos}</TableCell>
-                        <TableCell className="text-right font-medium text-cinema-gold">
-                          {formatearPrecio(venta.total)}
-                        </TableCell>
+                {stats?.recentTickets && stats.recentTickets.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border hover:bg-transparent">
+                        <TableHead className="text-muted-foreground">Código</TableHead>
+                        <TableHead className="text-muted-foreground">Película</TableHead>
+                        <TableHead className="text-muted-foreground">Cliente</TableHead>
+                        <TableHead className="text-muted-foreground">Asiento</TableHead>
+                        <TableHead className="text-muted-foreground">Estado</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {stats.recentTickets.map((ticket) => (
+                        <TableRow key={ticket.id} className="border-border">
+                          <TableCell className="font-mono text-primary">{ticket.ticket_code}</TableCell>
+                          <TableCell className="text-foreground">{ticket.movie_title}</TableCell>
+                          <TableCell className="text-muted-foreground">{ticket.customer_name}</TableCell>
+                          <TableCell className="text-muted-foreground">{ticket.seat_row}{ticket.seat_number}</TableCell>
+                          <TableCell>
+                            <Badge className={ticket.is_validated ? 'bg-accent/20 text-accent' : 'bg-cinema-green/20 text-cinema-green'}>
+                              {ticket.is_validated ? 'Usado' : 'Válido'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">No hay ventas recientes</p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -278,14 +416,14 @@ export default function AdminPage() {
           <TabsContent value="peliculas" className="space-y-6">
             <div className="flex justify-between">
               <h2 className="text-xl font-bold text-foreground">Gestión de Películas</h2>
-              <Dialog>
+              <Dialog open={movieDialogOpen} onOpenChange={setMovieDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
                     <Plus className="mr-2 h-4 w-4" />
                     Nueva Película
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="border-border bg-card">
+                <DialogContent className="border-border bg-card max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle className="text-foreground">Agregar Nueva Película</DialogTitle>
                     <DialogDescription>
@@ -293,35 +431,71 @@ export default function AdminPage() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
-                    <Input placeholder="Título de la película" className="border-border bg-input" />
-                    <Textarea placeholder="Descripción" className="border-border bg-input" />
+                    <Input 
+                      placeholder="Título de la película" 
+                      className="border-border bg-input"
+                      value={newMovie.title}
+                      onChange={(e) => setNewMovie({...newMovie, title: e.target.value})}
+                    />
+                    <Textarea 
+                      placeholder="Sinopsis" 
+                      className="border-border bg-input"
+                      value={newMovie.synopsis}
+                      onChange={(e) => setNewMovie({...newMovie, synopsis: e.target.value})}
+                    />
                     <div className="grid grid-cols-2 gap-4">
-                      <Input placeholder="Duración (min)" type="number" className="border-border bg-input" />
-                      <Select>
+                      <Input 
+                        placeholder="Duración (min)" 
+                        type="number" 
+                        className="border-border bg-input"
+                        value={newMovie.duration}
+                        onChange={(e) => setNewMovie({...newMovie, duration: e.target.value})}
+                      />
+                      <Select value={newMovie.genre} onValueChange={(v) => setNewMovie({...newMovie, genre: v})}>
                         <SelectTrigger className="border-border bg-input">
                           <SelectValue placeholder="Género" />
                         </SelectTrigger>
                         <SelectContent className="border-border bg-card">
-                          <SelectItem value="accion">Acción</SelectItem>
-                          <SelectItem value="drama">Drama</SelectItem>
-                          <SelectItem value="scifi">Ciencia Ficción</SelectItem>
-                          <SelectItem value="thriller">Thriller</SelectItem>
+                          <SelectItem value="Acción">Acción</SelectItem>
+                          <SelectItem value="Drama">Drama</SelectItem>
+                          <SelectItem value="Ciencia Ficción">Ciencia Ficción</SelectItem>
+                          <SelectItem value="Thriller">Thriller</SelectItem>
+                          <SelectItem value="Comedia">Comedia</SelectItem>
+                          <SelectItem value="Terror">Terror</SelectItem>
+                          <SelectItem value="Animación">Animación</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    <Select>
+                    <Select value={newMovie.rating} onValueChange={(v) => setNewMovie({...newMovie, rating: v})}>
                       <SelectTrigger className="border-border bg-input">
                         <SelectValue placeholder="Clasificación" />
                       </SelectTrigger>
                       <SelectContent className="border-border bg-card">
-                        <SelectItem value="tp">TP - Todo Público</SelectItem>
-                        <SelectItem value="+13">+13</SelectItem>
-                        <SelectItem value="+16">+16</SelectItem>
+                        <SelectItem value="TP">TP - Todo Público</SelectItem>
+                        <SelectItem value="+7">+7</SelectItem>
+                        <SelectItem value="+12">+12</SelectItem>
+                        <SelectItem value="+15">+15</SelectItem>
                         <SelectItem value="+18">+18</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Input placeholder="URL de imagen" className="border-border bg-input" />
-                    <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+                    <Input 
+                      placeholder="URL del poster" 
+                      className="border-border bg-input"
+                      value={newMovie.poster_url}
+                      onChange={(e) => setNewMovie({...newMovie, poster_url: e.target.value})}
+                    />
+                    <Input 
+                      type="date" 
+                      className="border-border bg-input"
+                      value={newMovie.release_date}
+                      onChange={(e) => setNewMovie({...newMovie, release_date: e.target.value})}
+                    />
+                    <Button 
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
+                      onClick={handleAddMovie}
+                      disabled={saving}
+                    >
+                      {saving ? <Spinner className="mr-2 h-4 w-4" /> : null}
                       Guardar Película
                     </Button>
                   </div>
@@ -330,21 +504,20 @@ export default function AdminPage() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {peliculas.map((movie) => (
+              {movies.map((movie) => (
                 <Card key={movie.id} className="border-border bg-card">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div>
-                        <CardTitle className="text-lg text-foreground">{movie.titulo}</CardTitle>
+                        <CardTitle className="text-lg text-foreground">{movie.title}</CardTitle>
                         <CardDescription className="mt-1">
-                          {movie.genero} - {movie.duracion} min
+                          {movie.genre} - {movie.duration} min
                         </CardDescription>
                       </div>
                       <Badge 
-                        variant={movie.estado === 'activa' ? 'default' : 'secondary'}
-                        className={movie.estado === 'activa' ? 'bg-cinema-green/20 text-cinema-green' : ''}
+                        className={movie.is_active ? 'bg-cinema-green/20 text-cinema-green' : 'bg-muted text-muted-foreground'}
                       >
-                        {movie.estado}
+                        {movie.is_active ? 'Activa' : 'Inactiva'}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -354,7 +527,12 @@ export default function AdminPage() {
                         <Pencil className="mr-2 h-3 w-3" />
                         Editar
                       </Button>
-                      <Button variant="outline" size="sm" className="border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                        onClick={() => handleDeleteMovie(movie.id)}
+                      >
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
@@ -368,7 +546,7 @@ export default function AdminPage() {
           <TabsContent value="funciones" className="space-y-6">
             <div className="flex justify-between">
               <h2 className="text-xl font-bold text-foreground">Programación de Funciones</h2>
-              <Dialog>
+              <Dialog open={showtimeDialogOpen} onOpenChange={setShowtimeDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
                     <Plus className="mr-2 h-4 w-4" />
@@ -383,34 +561,57 @@ export default function AdminPage() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
-                    <Select>
+                    <Select value={newShowtime.movie_id} onValueChange={(v) => setNewShowtime({...newShowtime, movie_id: v})}>
                       <SelectTrigger className="border-border bg-input">
                         <SelectValue placeholder="Seleccionar película" />
                       </SelectTrigger>
                       <SelectContent className="border-border bg-card">
-                        {peliculas.map((movie) => (
-                          <SelectItem key={movie.id} value={movie.id}>
-                            {movie.titulo}
+                        {movies.map((movie) => (
+                          <SelectItem key={movie.id} value={movie.id.toString()}>
+                            {movie.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={newShowtime.room_id} onValueChange={(v) => setNewShowtime({...newShowtime, room_id: v})}>
+                      <SelectTrigger className="border-border bg-input">
+                        <SelectValue placeholder="Sala" />
+                      </SelectTrigger>
+                      <SelectContent className="border-border bg-card">
+                        {rooms.map((room) => (
+                          <SelectItem key={room.id} value={room.id.toString()}>
+                            {room.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     <div className="grid grid-cols-2 gap-4">
-                      <Input type="date" className="border-border bg-input" />
-                      <Input type="time" className="border-border bg-input" />
+                      <Input 
+                        type="date" 
+                        className="border-border bg-input"
+                        value={newShowtime.show_date}
+                        onChange={(e) => setNewShowtime({...newShowtime, show_date: e.target.value})}
+                      />
+                      <Input 
+                        type="time" 
+                        className="border-border bg-input"
+                        value={newShowtime.show_time}
+                        onChange={(e) => setNewShowtime({...newShowtime, show_time: e.target.value})}
+                      />
                     </div>
-                    <Select>
-                      <SelectTrigger className="border-border bg-input">
-                        <SelectValue placeholder="Sala" />
-                      </SelectTrigger>
-                      <SelectContent className="border-border bg-card">
-                        <SelectItem value="sala1">Sala 1</SelectItem>
-                        <SelectItem value="sala2">Sala 2</SelectItem>
-                        <SelectItem value="sala3">Sala 3</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input type="number" placeholder="Precio" className="border-border bg-input" />
-                    <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+                    <Input 
+                      type="number" 
+                      placeholder="Precio" 
+                      className="border-border bg-input"
+                      value={newShowtime.price}
+                      onChange={(e) => setNewShowtime({...newShowtime, price: e.target.value})}
+                    />
+                    <Button 
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
+                      onClick={handleAddShowtime}
+                      disabled={saving}
+                    >
+                      {saving ? <Spinner className="mr-2 h-4 w-4" /> : null}
                       Guardar Función
                     </Button>
                   </div>
@@ -427,46 +628,21 @@ export default function AdminPage() {
                       <TableHead className="text-muted-foreground">Fecha</TableHead>
                       <TableHead className="text-muted-foreground">Hora</TableHead>
                       <TableHead className="text-muted-foreground">Sala</TableHead>
-                      <TableHead className="text-muted-foreground">Precio</TableHead>
-                      <TableHead className="text-muted-foreground">Estado</TableHead>
-                      <TableHead className="text-right text-muted-foreground">Acciones</TableHead>
+                      <TableHead className="text-right text-muted-foreground">Precio</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {funciones.map((funcion) => {
-                      const movie = peliculas.find(p => p.id === funcion.peliculaId)
-                      return (
-                        <TableRow key={funcion.id} className="border-border">
-                          <TableCell className="font-medium text-foreground">
-                            {movie?.titulo}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">{funcion.fecha}</TableCell>
-                          <TableCell className="text-muted-foreground">{funcion.hora}</TableCell>
-                          <TableCell className="text-muted-foreground">{funcion.sala}</TableCell>
-                          <TableCell className="text-cinema-gold">
-                            {formatearPrecio(funcion.precio)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge 
-                              variant="secondary"
-                              className={funcion.estado === 'disponible' ? 'bg-cinema-green/20 text-cinema-green' : 'bg-destructive/20 text-destructive'}
-                            >
-                              {funcion.estado}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
+                    {showtimes.map((showtime) => (
+                      <TableRow key={showtime.id} className="border-border">
+                        <TableCell className="text-foreground">{showtime.movie_title}</TableCell>
+                        <TableCell className="text-muted-foreground">{formatDate(showtime.show_date)}</TableCell>
+                        <TableCell className="text-muted-foreground">{showtime.show_time}</TableCell>
+                        <TableCell className="text-muted-foreground">{showtime.room_name}</TableCell>
+                        <TableCell className="text-right font-medium text-cinema-gold">
+                          {formatPrice(showtime.price)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -477,99 +653,33 @@ export default function AdminPage() {
           <TabsContent value="ventas" className="space-y-6">
             <h2 className="text-xl font-bold text-foreground">Historial de Ventas</h2>
             
-            <div className="grid gap-4 md:grid-cols-3">
-              <Card className="border-border bg-card">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Ventas Hoy
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-cinema-gold">
-                    {formatearPrecio(450000)}
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="border-border bg-card">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Ventas Esta Semana
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-cinema-gold">
-                    {formatearPrecio(2450000)}
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="border-border bg-card">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Ventas Este Mes
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-cinema-gold">
-                    {formatearPrecio(8750000)}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
             <Card className="border-border bg-card">
-              <CardHeader>
-                <CardTitle className="text-foreground">Todas las Ventas</CardTitle>
-                <CardDescription>Registro completo de transacciones</CardDescription>
-              </CardHeader>
-              <CardContent>
+              <CardContent className="pt-6">
                 <Table>
                   <TableHeader>
                     <TableRow className="border-border hover:bg-transparent">
                       <TableHead className="text-muted-foreground">Código</TableHead>
                       <TableHead className="text-muted-foreground">Película</TableHead>
-                      <TableHead className="text-muted-foreground">Fecha</TableHead>
-                      <TableHead className="text-muted-foreground">Asientos</TableHead>
+                      <TableHead className="text-muted-foreground">Cliente</TableHead>
+                      <TableHead className="text-muted-foreground">Función</TableHead>
+                      <TableHead className="text-muted-foreground">Asiento</TableHead>
                       <TableHead className="text-muted-foreground">Estado</TableHead>
-                      <TableHead className="text-right text-muted-foreground">Total</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {[
-                      { codigo: 'TKT-A1B2C3D4', pelicula: 'Dune: Parte Dos', fecha: '2026-03-20', asientos: ['A5', 'A6'], estado: 'activo', total: 36000 },
-                      { codigo: 'TKT-E5F6G7H8', pelicula: 'Oppenheimer', fecha: '2026-03-20', asientos: ['C1', 'C2', 'C3', 'C4'], estado: 'usado', total: 72000 },
-                      { codigo: 'TKT-I9J0K1L2', pelicula: 'Guardianes del Tiempo', fecha: '2026-03-19', asientos: ['E8', 'E9', 'E10'], estado: 'activo', total: 36000 },
-                      { codigo: 'TKT-M3N4O5P6', pelicula: 'Cosmos: El Viaje', fecha: '2026-03-19', asientos: ['B7'], estado: 'usado', total: 15000 },
-                      { codigo: 'TKT-Q7R8S9T0', pelicula: 'Sombras del Pasado', fecha: '2026-03-18', asientos: ['D3', 'D4'], estado: 'cancelado', total: 36000 },
-                    ].map((venta) => (
-                      <TableRow key={venta.codigo} className="border-border">
-                        <TableCell className="font-mono text-primary">{venta.codigo}</TableCell>
-                        <TableCell className="text-foreground">{venta.pelicula}</TableCell>
-                        <TableCell className="text-muted-foreground">{venta.fecha}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {venta.asientos.map(seat => (
-                              <Badge key={seat} variant="secondary" className="text-xs">
-                                {seat}
-                              </Badge>
-                            ))}
-                          </div>
+                    {tickets.map((ticket) => (
+                      <TableRow key={ticket.id} className="border-border">
+                        <TableCell className="font-mono text-primary">{ticket.ticket_code}</TableCell>
+                        <TableCell className="text-foreground">{ticket.movie_title}</TableCell>
+                        <TableCell className="text-muted-foreground">{ticket.customer_name}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {ticket.show_date && formatDate(ticket.show_date)} - {ticket.show_time}
                         </TableCell>
+                        <TableCell className="text-muted-foreground">{ticket.seat_row}{ticket.seat_number}</TableCell>
                         <TableCell>
-                          <Badge 
-                            variant="secondary"
-                            className={
-                              venta.estado === 'activo' 
-                                ? 'bg-cinema-green/20 text-cinema-green' 
-                                : venta.estado === 'usado'
-                                  ? 'bg-accent/20 text-accent'
-                                  : 'bg-destructive/20 text-destructive'
-                            }
-                          >
-                            {venta.estado}
+                          <Badge className={ticket.is_validated ? 'bg-accent/20 text-accent' : 'bg-cinema-green/20 text-cinema-green'}>
+                            {ticket.is_validated ? 'Validado' : 'Pendiente'}
                           </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-cinema-gold">
-                          {formatearPrecio(venta.total)}
                         </TableCell>
                       </TableRow>
                     ))}
