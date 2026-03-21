@@ -24,6 +24,8 @@ Esta aplicación fue generada con [v0](https://v0.app) y utiliza [Next.js](https
 
 ### Base de Datos
 - **Neon Serverless** - Base de datos PostgreSQL sin servidor
+- **pg** - Driver de PostgreSQL para Node.js
+- **pgcrypto** - Extensión PostgreSQL para generación de UUIDs
 
 ### Validación y Formularios
 - **React Hook Form** - Gestión de formularios
@@ -36,6 +38,115 @@ Esta aplicación fue generada con [v0](https://v0.app) y utiliza [Next.js](https
 - **next-themes 0.4.6** - Soporte para temas claro/oscuro
 - **Vercel Analytics** - Análisis y métricas
 - **Tailwind Merge & CLSX** - Utilidades para clases CSS
+
+---
+
+## 🗄️ Estructura de la Base de Datos
+
+El proyecto utiliza PostgreSQL con las siguientes tablas:
+
+### Tablas Principales
+
+| Tabla | Descripción |
+|-------|-------------|
+| `movies` | Catálogo de películas |
+| `users` | Usuarios del sistema (administradores y clientes) |
+| `rooms` | Salas del cine |
+| `seats` | Asientos por sala |
+| `showtimes` | Funciones/honorarios de películas |
+| `showtime_seats` | Estado de asientos por función |
+| `tickets` | Tiquetes comprados |
+| `ticket_seats` | Relación tiquetes-asientos |
+
+### Esquema Detallado
+
+```sql
+-- Extensión para UUIDs
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- 🎬 MOVIES - Películas
+CREATE TABLE movies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(255) NOT NULL,
+    genre VARCHAR(100),
+    duration INT, -- minutos
+    rating VARCHAR(10),
+    synopsis TEXT,
+    poster_url TEXT,
+    trailer_url TEXT,
+    release_date DATE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 👤 USERS - Usuarios (admin + cliente)
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'client')),
+    phone VARCHAR(20),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 🏢 ROOMS - Salas
+CREATE TABLE rooms (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(50) NOT NULL,
+    capacity INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 🪑 SEATS - Asientos por sala
+CREATE TABLE seats (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+    row CHAR(1),
+    number INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 🎬 SHOWTIMES - Funciones
+CREATE TABLE showtimes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    movie_id UUID REFERENCES movies(id) ON DELETE CASCADE,
+    room_id UUID REFERENCES rooms(id),
+    start_time TIMESTAMP NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 🔥 ESTADO DE ASIENTOS POR FUNCIÓN
+CREATE TABLE showtime_seats (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    showtime_id UUID REFERENCES showtimes(id) ON DELETE CASCADE,
+    seat_id UUID REFERENCES seats(id),
+    status VARCHAR(20) DEFAULT 'available' 
+        CHECK (status IN ('available', 'reserved', 'sold')),
+    UNIQUE(showtime_id, seat_id)
+);
+
+-- 🎟️ TICKETS - Tiquetes
+CREATE TABLE tickets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    showtime_id UUID REFERENCES showtimes(id),
+    code VARCHAR(50) UNIQUE NOT NULL,
+    total DECIMAL(10,2) NOT NULL,
+    status VARCHAR(20) DEFAULT 'active' 
+        CHECK (status IN ('active', 'used', 'cancelled')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 🎟️ RELACIÓN TICKET - ASIENTOS
+CREATE TABLE ticket_seats (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ticket_id UUID REFERENCES tickets(id) ON DELETE CASCADE,
+    seat_id UUID REFERENCES seats(id)
+);
+```
 
 ---
 
@@ -76,7 +187,7 @@ v0-cine-ticket-app/
 │   │   ├── toast.tsx             # Notificaciones toast
 │   │   ├── chart.tsx             # Gráficos
 │   │   ├── calendar.tsx          # Calendario
-│   │   └── ... (más componentes)
+│   │   └── ... (más de 40 componentes)
 │   │
 │   ├── header.tsx                # Encabezado de navegación
 │   ├── hero-section.tsx          # Sección hero principal
@@ -86,9 +197,9 @@ v0-cine-ticket-app/
 │   └── theme-provider.tsx        # Proveedor de temas
 │
 ├── lib/                          # Utilidades y configuración
-│   ├── data.ts                   # Interfaces y datos de ejemplo
-│   ├── db.ts                     # Configuración de base de datos
-│   └── utils.ts                  # Utilidades generales
+│   ├── data.ts                   # Interfaces TypeScript y datos de ejemplo
+│   ├── db.ts                     # Configuración de conexión a Neon
+│   └── utils.ts                  # Utilidades CSS
 │
 ├── hooks/                        # Hooks personalizados
 │   ├── use-mobile.ts             # Detección de dispositivos móviles
@@ -123,17 +234,17 @@ v0-cine-ticket-app/
 
 ### Página Principal (`/`)
 - Muestra las películas en cartelera
-- Sección hero con destacadas
-- Navegación a otras secciones
+- Sección hero con películas destacadas
+- Navegación a otras secciones del sitio
 
 ### Funciones (`/funciones`)
 - Lista completa de funciones disponibles
 - Filtros por fecha, género y sala
-- Selección de función para compra
+- Selección de función para compra de tiquetes
 
 ### Detalle de Película (`/pelicula/[id]`)
 - Información detallada de cada película
-- Sinopsis, duración, clasificación
+- Sinopsis, duración, clasificación por edad
 - Horarios disponibles y compra de tiquetes
 
 ### Validar Tiquete (`/validar`)
@@ -142,10 +253,10 @@ v0-cine-ticket-app/
 - Estados: activo, usado, cancelado
 
 ### Panel de Administración (`/admin`)
-- **Dashboard**: Estadísticas y métricas
-- **Gestión de Películas**: CRUD completo
-- **Gestión de Funciones**: Crear/modificar funciones
-- **Gestión de Salas**: Administrar salas disponibles
+- **Dashboard**: Estadísticas y métricas del cine
+- **Gestión de Películas**: CRUD completo de películas
+- **Gestión de Funciones**: Crear/modificar horarios de funciones
+- **Gestión de Salas**: Administrar salas y asientos
 - **Reportes**: Visualización de ventas y ocupación
 
 ### Inicio de Sesión Admin (`/admin/login`)
@@ -169,7 +280,7 @@ v0-cine-ticket-app/
 
 ---
 
-## 🎨 Interfaces y Modelos de Datos
+## 🎨 Interfaces TypeScript
 
 ### Película (Movie)
 ```typescript
@@ -230,6 +341,16 @@ v0-cine-ticket-app/
 ### Requisitos Previos
 - Node.js 18.x o superior
 - pnpm, npm o yarn (el proyecto usa pnpm por defecto)
+- Cuenta en [Neon](https://neon.tech) para la base de datos PostgreSQL
+
+### Configuración de Variables de Entorno
+
+Crea un archivo `.env` con las siguientes variables:
+
+```env
+# Conexión a Neon Database
+DATABASE_URL=postgresql://username:password@host.neon.tech/database?sslmode=require
+```
 
 ### Instalación
 
@@ -251,6 +372,15 @@ yarn dev
 ```
 
 La aplicación estará disponible en [http://localhost:3000](http://localhost:3000)
+
+### Configurar Base de Datos
+
+Ejecuta los scripts SQL en orden para crear las tablas:
+
+```bash
+# Conectate a tu base de datos Neon y ejecuta:
+psql $DATABASE_URL -f scripts/001-create-tables.sql
+```
 
 ### Construcción para Producción
 
@@ -283,23 +413,35 @@ npm start
 
 ## 🎯 Características Principales
 
-1. **Exploración de Películas**: Navegación intuitiva por el catálogo de películas
-2. **Selección de Asientos**: Interfaz visual para elegir asientos en la sala
-3. **Compra de Tiquetes**: Proceso completo de compra con generación de códigos
-4. **Validación de Tiquetes**: Sistema para verificar tiquetes en la entrada
-5. **Panel de Administración**: Dashboard completo para gestión del cine
-6. **Sistema de Temas**: Soporte para modo claro y oscuro
-7. **Diseño Responsivo**: Adaptable a dispositivos móviles y escritorio
-8. **Base de Datos**: Almacenamiento persistente con PostgreSQL (Neon)
+1. **Exploración de Películas** - Navegación intuitiva por el catálogo de películas con filtros
+2. **Selección de Asientos** - Interfaz visual interactiva para elegir asientos en la sala
+3. **Compra de Tiquetes** - Proceso completo de compra con generación de códigos únicos
+4. **Validación de Tiquetes** - Sistema para verificar tiquetes en la entrada del cine
+5. **Panel de Administración** - Dashboard completo para gestión del cine
+6. **Sistema de Temas** - Soporte para modo claro y oscuro
+7. **Diseño Responsivo** - Adaptable a dispositivos móviles y escritorio
+8. **Base de Datos Relacional** - Almacenamiento persistente con PostgreSQL
 
 ---
 
 ## 📊 Estadísticas del Proyecto
 
-- **Componentes UI**: Más de 30 componentes de Radix UI
-- **Rutas de API**: 9 endpoints diferentes
+- **Componentes UI**: Más de 40 componentes de Radix UI
+- **Rutas de API**: 9 endpoints REST
 - **Páginas**: 6 páginas principales
+- **Tablas de BD**: 8 tablas PostgreSQL
 - **Estado**: Tema oscuro por defecto
+
+---
+
+## 📁 Archivos de Scripts de Base de Datos
+
+| Archivo | Descripción |
+|---------|-------------|
+| `001-create-tables.sql` | Creación inicial de todas las tablas |
+| `002-recreate-tables.sql` | Recrear tablas (drop y create) |
+| `003-fix-schema.sql` | Correcciones al esquema |
+| `add-movies.js` | Script Node.js para insertar películas de ejemplo |
 
 ---
 
@@ -316,3 +458,4 @@ Este proyecto fue creado con [v0](https://v0.app) y está disponible para desarr
 - [Radix UI Components](https://www.radix-ui.com)
 - [Tailwind CSS](https://tailwindcss.com)
 - [Neon Database](https://neon.tech)
+- [Documentación de PostgreSQL](https://www.postgresql.org/docs/)
