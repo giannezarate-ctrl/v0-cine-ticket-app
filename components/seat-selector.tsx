@@ -125,7 +125,7 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
   }
 
   return (
-    <section className="mb-16 rounded-2xl border border-border bg-card/50 p-6 md:p-8">
+    <section className="mb-16 rounded-2xl border border-border bg-card/50 p-3 sm:p-6 md:p-8">
       <div className="mb-8 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
           <Ticket className="h-5 w-5 text-primary" />
@@ -140,9 +140,9 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
         </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         {/* Seat Map */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto pb-4">
           {/* Screen */}
           <div className="mb-8 flex flex-col items-center">
             <div className="relative mb-2 h-2 w-full max-w-md overflow-hidden rounded-full bg-gradient-to-r from-transparent via-primary/50 to-transparent">
@@ -163,11 +163,11 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
               {/* Seats Grid */}
               <div className="flex flex-col items-center gap-2">
                 {filas.map(fila => (
-                  <div key={fila} className="flex items-center gap-2">
-                    <span className="w-6 text-center text-sm font-medium text-muted-foreground">
+                  <div key={fila} className="flex items-center gap-1 sm:gap-2">
+                    <span className="w-4 sm:w-6 text-center text-[10px] sm:text-sm font-medium text-muted-foreground">
                       {fila}
                     </span>
-                    <div className="flex gap-1">
+                    <div className="flex gap-0.5 sm:gap-1">
                       {columnas.map(col => {
                         const seatId = `${fila}${col}`
                         const isSelected = selectedSeats.includes(seatId)
@@ -179,8 +179,7 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
                             onClick={() => toggleSeat(fila, col)}
                             disabled={isOccupied}
                             className={`
-                              flex h-7 w-7 items-center justify-center rounded-t-lg text-xs font-medium transition-all
-                              md:h-8 md:w-8
+                              flex h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 items-center justify-center rounded-t-lg text-[10px] sm:text-xs font-medium transition-all
                               ${isOccupied 
                                 ? 'cursor-not-allowed bg-destructive/20 text-destructive/40' 
                                 : isSelected 
@@ -195,7 +194,7 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
                         )
                       })}
                     </div>
-                    <span className="w-6 text-center text-sm font-medium text-muted-foreground">
+                    <span className="w-4 sm:w-6 text-center text-[10px] sm:text-sm font-medium text-muted-foreground">
                       {fila}
                     </span>
                   </div>

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Header } from '@/components/header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -46,7 +47,9 @@ import {
   Trash2,
   BarChart3,
   PieChart,
-  RefreshCw
+  RefreshCw,
+  LogOut,
+  LogIn
 } from 'lucide-react'
 
 interface Stats {
@@ -59,6 +62,9 @@ interface Stats {
 }
 
 export default function AdminPage() {
+  const router = useRouter()
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const isAuthChecked = useRef(false)
   const [activeTab, setActiveTab] = useState('dashboard')
   const [stats, setStats] = useState<Stats | null>(null)
   const [movies, setMovies] = useState<Movie[]>([])
@@ -115,8 +121,23 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    fetchData()
+    if (isAuthChecked.current) return
+    isAuthChecked.current = true
+    
+    const session = localStorage.getItem('admin_session')
+    if (!session) {
+      window.location.href = '/admin/login'
+    } else {
+      setIsAuthenticated(true)
+      fetchData()
+    }
   }, [])
+
+  const handleLogout = () => {
+    localStorage.removeItem('admin_session')
+    localStorage.removeItem('admin_email')
+    router.push('/admin/login')
+  }
 
   const handleAddMovie = async () => {
     setSaving(true)
@@ -212,6 +233,10 @@ export default function AdminPage() {
             <Button variant="outline" size="sm" onClick={fetchData} className="border-border">
               <RefreshCw className="mr-2 h-4 w-4" />
               Actualizar
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleLogout} className="border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground">
+              <LogOut className="mr-2 h-4 w-4" />
+              Cerrar Sesión
             </Button>
             <Badge variant="outline" className="border-cinema-green/50 text-cinema-green">
               Sistema Activo

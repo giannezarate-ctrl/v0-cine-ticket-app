@@ -13,58 +13,49 @@ interface MovieCardProps {
 
 export function MovieCard({ movie }: MovieCardProps) {
   return (
-    <div className="group relative overflow-hidden rounded-xl bg-card transition-all duration-300 hover:ring-2 hover:ring-primary/50">
-      {/* Poster Image */}
-      <div className="relative aspect-[2/3] overflow-hidden">
-        <Image
-          src={movie.poster_url}
-          alt={movie.title}
-          fill
-          className="object-cover transition-transform duration-500 group-hover:scale-105"
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-        />
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-        
-        {/* Classification Badge */}
-        <Badge 
-          className="absolute right-3 top-3 bg-background/90 text-foreground backdrop-blur-sm"
-        >
-          {movie.rating}
-        </Badge>
-
-        {/* Quick Actions - Appear on hover */}
-        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 p-4 opacity-0 transition-all duration-300 group-hover:opacity-100">
-          <Link href={`/pelicula/${movie.id}`} className="w-full">
+    <Link href={`/pelicula/${movie.id}`} className="block">
+      <div className="group relative overflow-hidden rounded-xl bg-card transition-all duration-300 hover:ring-2 hover:ring-primary/50">
+        <div className="relative aspect-[2/3] overflow-hidden">
+          <Image
+            src={movie.poster_url}
+            alt={movie.title}
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            loading="lazy"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+          <Badge 
+            className="absolute right-3 top-3 bg-background/90 text-foreground backdrop-blur-sm"
+          >
+            {movie.rating}
+          </Badge>
+          <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 p-4 opacity-0 transition-all duration-300 group-hover:opacity-100">
             <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
               <Calendar className="mr-2 h-4 w-4" />
               Ver Funciones
             </Button>
-          </Link>
+          </div>
+        </div>
+        <div className="p-4">
+          <h3 className="mb-2 line-clamp-1 text-lg font-semibold text-foreground">
+            {movie.title}
+          </h3>
+          <div className="mb-3 flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5" />
+              {movie.duration} min
+            </span>
+            <span className="flex items-center gap-1">
+              <Star className="h-3.5 w-3.5 fill-cinema-gold text-cinema-gold" />
+              8.5
+            </span>
+          </div>
+          <Badge variant="secondary" className="bg-secondary text-secondary-foreground">
+            {movie.genre}
+          </Badge>
         </div>
       </div>
-
-      {/* Movie Info */}
-      <div className="p-4">
-        <h3 className="mb-2 line-clamp-1 text-lg font-semibold text-foreground">
-          {movie.title}
-        </h3>
-        
-        <div className="mb-3 flex items-center gap-3 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Clock className="h-3.5 w-3.5" />
-            {movie.duration} min
-          </span>
-          <span className="flex items-center gap-1">
-            <Star className="h-3.5 w-3.5 fill-cinema-gold text-cinema-gold" />
-            {movie.score?.toFixed(1) || '8.5'}
-          </span>
-        </div>
-
-        <Badge variant="secondary" className="bg-secondary text-secondary-foreground">
-          {movie.genre}
-        </Badge>
-      </div>
-    </div>
+    </Link>
   )
 }

@@ -4,6 +4,10 @@ import { MovieCard } from '@/components/movie-card'
 import { sql, Movie } from '@/lib/db'
 import { Film } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
+export const revalidate = 60
+
 async function getMovies(): Promise<Movie[]> {
   const movies = await sql`
     SELECT * FROM movies 

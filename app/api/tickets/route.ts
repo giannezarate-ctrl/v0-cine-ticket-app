@@ -31,7 +31,12 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const { showtime_id, seats, customer_name, customer_email } = body
-    
+
+    const showtimeResult = await sql`
+      SELECT price FROM showtimes WHERE id = ${showtime_id}
+    `
+    const showtimePrice = showtimeResult[0]?.price
+
     const createdTickets = []
     
     for (const seat of seats) {
@@ -52,8 +57,8 @@ export async function POST(request: Request) {
       }
       
       const result = await sql`
-        INSERT INTO tickets (showtime_id, seat_row, seat_number, ticket_code, customer_name, customer_email)
-        VALUES (${showtime_id}, ${seat.row}, ${seat.number}, ${ticketCode}, ${customer_name}, ${customer_email})
+        INSERT INTO tickets (showtime_id, seat_row, seat_number, ticket_code, customer_name, customer_email, price)
+        VALUES (${showtime_id}, ${seat.row}, ${seat.number}, ${ticketCode}, ${customer_name}, ${customer_email}, ${showtimePrice})
         RETURNING *
       `
       createdTickets.push(result[0])
@@ -62,6 +67,7 @@ export async function POST(request: Request) {
     return NextResponse.json(createdTickets, { status: 201 })
   } catch (error) {
     console.error('Error creating tickets:', error)
-    return NextResponse.json({ error: 'Error creating tickets' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Error creating tickets'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

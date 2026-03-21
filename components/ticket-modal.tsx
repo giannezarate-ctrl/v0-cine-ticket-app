@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import type { Movie, Showtime } from '@/lib/db'
-import { CheckCircle2, Download, Copy, Film } from 'lucide-react'
+import { CheckCircle2, Download, Copy, Film, Printer } from 'lucide-react'
 import { useState } from 'react'
 
 interface TicketModalProps {
@@ -55,9 +55,112 @@ export function TicketModal({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleDownload = () => {
+    const invoiceContent = `
+========================================
+         CINEPLEX - FACTURA
+========================================
+
+Fecha: ${new Date().toLocaleDateString('es-CO')}
+Hora: ${new Date().toLocaleTimeString('es-CO')}
+
+----------------------------------------
+DATOS DEL CLIENTE
+----------------------------------------
+Cliente: ${customerName}
+
+----------------------------------------
+DETALLE DE LA COMPRA
+----------------------------------------
+Pelicula: ${movie.title}
+Funcion: ${formatDate(showtime.show_date)}
+Hora: ${showtime.show_time}
+Sala: ${showtime.room_name}
+
+Asientos: ${seats.join(', ')}
+
+----------------------------------------
+CODIGOS DE TICKET
+----------------------------------------
+${ticketCodes.join('\n')}
+
+========================================
+TOTAL PAGADO: ${formatPrice(total)}
+========================================
+
+Gracias por su compra!
+Presente este ticket en la entrada.
+
+========================================
+    CINEPLEX - Donde la magia cobra vida
+========================================
+    `
+    
+    const blob = new Blob([invoiceContent], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `CinePlex_Factura_${ticketCodes[0]}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handlePrint = () => {
+    const printContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CinePlex - Ticket</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 400px; margin: 0 auto; }
+    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+    .title { font-size: 24px; font-weight: bold; }
+    .info { margin: 10px 0; }
+    .label { font-weight: bold; }
+    .codes { background: #f0f0f0; padding: 10px; text-align: center; font-family: monospace; font-size: 16px; }
+    .total { font-size: 20px; font-weight: bold; text-align: right; margin-top: 20px; }
+    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">CINEPLEX</div>
+    <div>FACTURA DE COMPRA</div>
+  </div>
+  <div class="info"><span class="label">Fecha:</span> ${new Date().toLocaleDateString('es-CO')}</div>
+  <div class="info"><span class="label">Cliente:</span> ${customerName}</div>
+  <div class="info"><span class="label">Pelicula:</span> ${movie.title}</div>
+  <div class="info"><span class="label">Funcion:</span> ${formatDate(showtime.show_date)}</div>
+  <div class="info"><span class="label">Hora:</span> ${showtime.show_time}</div>
+  <div class="info"><span class="label">Sala:</span> ${showtime.room_name}</div>
+  <div class="info"><span class="label">Asientos:</span> ${seats.join(', ')}</div>
+  <div class="codes">
+    <div>CODIGO(S):</div>
+    ${ticketCodes.map(c => `<div>${c}</div>`).join('')}
+  </div>
+  <div class="total">TOTAL: ${formatPrice(total)}</div>
+  <div class="footer">
+    Gracias por su compra!<br>
+    Presente este ticket en la entrada<br>
+    CINEPLEX - Donde la magia cobra vida
+  </div>
+</body>
+</html>
+    `
+    
+    const printWindow = window.open('', '_blank')
+    if (printWindow) {
+      printWindow.document.write(printContent)
+      printWindow.document.close()
+      printWindow.print()
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md border-border bg-card">
+      <DialogContent className="max-w-md w-[95vw] sm:max-w-md border-border bg-card max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-center gap-2 text-center">
             <CheckCircle2 className="h-6 w-6 text-cinema-green" />
@@ -154,13 +257,17 @@ export function TicketModal({
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3">
-            <Button variant="outline" className="flex-1 border-border" onClick={onClose}>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button variant="outline" className="flex-1 border-border order-2 sm:order-1" onClick={onClose}>
               Cerrar
             </Button>
-            <Button className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90">
+            <Button className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 order-1 sm:order-2" onClick={handleDownload}>
               <Download className="mr-2 h-4 w-4" />
               Descargar
+            </Button>
+            <Button variant="secondary" className="flex-1 order-3" onClick={handlePrint}>
+              <Printer className="mr-2 h-4 w-4" />
+              Imprimir
             </Button>
           </div>
         </div>
