@@ -11,6 +11,8 @@ const publicRoutes = [
   '/validar',
   '/admin/login',
   '/api/auth',
+  '/api/auth/login',
+  '/api/auth/register',
   '/api/movies',
   '/api/funciones',
   '/api/showtimes',
@@ -139,12 +141,8 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Coincidir con todas las rutas excepto:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public files
+     * Coincidir con todas las rutas EXCEPTO las rutas de autenticación y API públicas
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!api/auth|api/auth/login|api/auth/register|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
