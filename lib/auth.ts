@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken'
 import { cookies } from 'next/headers'
 import { sql } from './db'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'cineplex-secret-key-2024'
+const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey123cineplexapp2024'
 const JWT_EXPIRES_IN = '7d'
 
 export interface User {
@@ -49,12 +49,16 @@ export function verifyToken(token: string): TokenPayload | null {
 // Set auth cookie
 export async function setAuthCookie(token: string) {
   const cookieStore = await cookies()
+  const isProduction = process.env.NODE_ENV === 'production'
+  
   cookieStore.set('auth-token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProduction,
     sameSite: 'lax',
     maxAge: 60 * 60 * 24 * 7, // 7 days
     path: '/',
+    // En producción, no especificar dominio para permitir subdominios
+    ...(isProduction ? {} : {}),
   })
 }
 

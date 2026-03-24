@@ -38,6 +38,7 @@ export function Header() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'me' }),
+        credentials: 'include', // Incluir cookies
       })
       const data = await res.json()
       if (data.user) {
