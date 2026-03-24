@@ -1,31 +1,59 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Film, Lock, Mail, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function AdminLoginPage() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  useEffect(() => {
+    // Check if already logged in as admin
+    fetch('/api/auth?action=me')
+      .then(res => res.json())
+      .then(data => {
+        if (data.user && data.user.role === 'admin') {
+          router.push('/admin')
+        }
+      })
+      .catch(() => {})
+  }, [router])
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
-    if (email.toLowerCase() === 'admin@gmail.com' && password === 'admin123') {
-      localStorage.setItem('admin_session', 'true')
-      localStorage.setItem('admin_email', email)
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'login',
+          email,
+          password
+        })
+      })
+
+      const data = await res.json()
+
+      if (res.ok && data.user && data.user.role === 'admin') {
+        router.push('/admin')
+      } else {
+        setError(data.error || 'Credenciales incorrectas. Intenta de nuevo.')
+      }
+    } catch (err) {
+      setError('Error al conectar con el servidor')
+    } finally {
       setLoading(false)
-      window.location.href = '/admin'
-    } else {
-      setLoading(false)
-      setError('Credenciales incorrectas. Intenta de nuevo.')
     }
   }
 

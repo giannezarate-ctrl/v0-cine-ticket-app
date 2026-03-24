@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,9 +31,33 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
   const [customerEmail, setCustomerEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [purchasing, setPurchasing] = useState(false)
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null)
+  const router = useRouter()
 
   const filas = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
   const columnas = Array.from({ length: 15 }, (_, i) => i + 1)
+
+  // Check authentication on mount
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'me' })
+        })
+        const data = await res.json()
+        if (data.user) {
+          setCurrentUser(data.user)
+          setCustomerName(data.user.name)
+          setCustomerEmail(data.user.email)
+        }
+      } catch (error) {
+        console.error('Error checking auth:', error)
+      }
+    }
+    checkAuth()
+  }, [])
 
   useEffect(() => {
     async function fetchOccupiedSeats() {
@@ -85,8 +110,13 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
   }
 
   const handlePurchase = async () => {
-    if (!customerName.trim() || !customerEmail.trim()) {
-      alert('Por favor ingresa tu nombre y correo electrónico')
+    if (!currentUser) {
+      router.push('/login')
+      return
+    }
+
+    if (selectedSeats.length === 0) {
+      alert('Por favor selecciona al menos un asiento')
       return
     }
 
@@ -103,8 +133,8 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
         body: JSON.stringify({
           showtime_id: showtime.id,
           seats,
-          customer_name: customerName,
-          customer_email: customerEmail
+          customer_name: currentUser.name,
+          customer_email: currentUser.email
         })
       })
 

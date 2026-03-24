@@ -124,18 +124,28 @@ export default function AdminPage() {
     if (isAuthChecked.current) return
     isAuthChecked.current = true
     
-    const session = localStorage.getItem('admin_session')
-    if (!session) {
-      window.location.href = '/admin/login'
-    } else {
-      setIsAuthenticated(true)
-      fetchData()
-    }
+    // Check authentication via API
+    fetch('/api/auth?action=me')
+      .then(res => res.json())
+      .then(data => {
+        if (data.user && data.user.role === 'admin') {
+          setIsAuthenticated(true)
+          fetchData()
+        } else {
+          window.location.href = '/admin/login'
+        }
+      })
+      .catch(() => {
+        window.location.href = '/admin/login'
+      })
   }, [])
 
-  const handleLogout = () => {
-    localStorage.removeItem('admin_session')
-    localStorage.removeItem('admin_email')
+  const handleLogout = async () => {
+    await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'logout' })
+    })
     router.push('/admin/login')
   }
 

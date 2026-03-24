@@ -1,14 +1,71 @@
 'use client'
 
 import Link from 'next/link'
-import { Film, Ticket, LayoutDashboard, Menu, X } from 'lucide-react'
+import { Film, Ticket, LayoutDashboard, Menu, X, User, LogOut, UserPlus } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useToast } from '@/components/ui/use-toast'
+
+interface UserData {
+  id: number
+  name: string
+  email: string
+  role: string
+}
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const pathname = usePathname()
+  const [user, setUser] = useState<UserData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    checkAuth()
+  }, [])
+
+  async function checkAuth() {
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'me' }),
+      })
+      const data = await res.json()
+      if (data.user) {
+        setUser(data.user)
+      }
+    } catch (error) {
+      console.error('Error checking auth:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logout' }),
+      })
+      setUser(null)
+      toast({
+        title: 'Sesión cerrada',
+        description: 'Has cerrado sesión exitosamente',
+      })
+    } catch (error) {
+      console.error('Error logging out:', error)
+    }
+  }
 
   const navLinks = [
     { href: '/', label: 'Cartelera' },
@@ -44,12 +101,59 @@ export function Header() {
               </Link>
             )
           })}
-          <Link href="/admin/login" prefetch={false}>
-            <Button variant="outline" className="ml-2 border-primary/50 text-primary hover:bg-primary hover:text-primary-foreground">
-              <LayoutDashboard className="mr-2 h-4 w-4" />
-              Admin
+          
+          {loading ? (
+            <Button variant="ghost" className="ml-2" disabled>
+              <User className="h-4 w-4 animate-pulse" />
             </Button>
-          </Link>
+          ) : user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="ml-2 border-primary/50 text-primary hover:bg-primary hover:text-primary-foreground">
+                  <User className="mr-2 h-4 w-4" />
+                  {user.name}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="flex items-center justify-start gap-2 p-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+                    <User className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">{user.name}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                  </div>
+                </div>
+                <DropdownMenuSeparator />
+                {user.role === 'admin' && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/admin">
+                      <LayoutDashboard className="mr-2 h-4 w-4" />
+                      Panel Admin
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem asChild>
+                  <Link href="/mis-tickets">
+                    <Ticket className="mr-2 h-4 w-4" />
+                    Mis Tickets
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-red-500 focus:text-red-500">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Cerrar Sesión
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Link href="/login" prefetch={true}>
+              <Button variant="outline" className="ml-2 border-primary/50 text-primary hover:bg-primary hover:text-primary-foreground">
+                <User className="mr-2 h-4 w-4" />
+                Iniciar Sesión
+              </Button>
+            </Link>
+          )}
         </nav>
 
         {/* Mobile Menu Button */}
@@ -83,12 +187,50 @@ export function Header() {
                 Validar Tiquete
               </Button>
             </Link>
-            <Link href="/admin/login" onClick={() => setIsMenuOpen(false)}>
-              <Button variant="outline" className="w-full justify-start border-primary/50 text-primary">
-                <LayoutDashboard className="mr-2 h-4 w-4" />
-                Panel Admin
+            
+            {loading ? (
+              <Button variant="ghost" className="w-full" disabled>
+                <User className="mr-2 h-4 w-4 animate-pulse" />
+                Cargando...
               </Button>
-            </Link>
+            ) : user ? (
+              <>
+                <div className="flex items-center gap-2 px-2 py-2 border-y border-border/40">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+                    <User className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{user.name}</p>
+                    <p className="text-xs text-muted-foreground">{user.email}</p>
+                  </div>
+                </div>
+                {user.role === 'admin' && (
+                  <Link href="/admin" onClick={() => setIsMenuOpen(false)}>
+                    <Button variant="ghost" className="w-full justify-start">
+                      <LayoutDashboard className="mr-2 h-4 w-4" />
+                      Panel Admin
+                    </Button>
+                  </Link>
+                )}
+                <Link href="/mis-tickets" onClick={() => setIsMenuOpen(false)}>
+                  <Button variant="ghost" className="w-full justify-start">
+                    <Ticket className="mr-2 h-4 w-4" />
+                    Mis Tickets
+                  </Button>
+                </Link>
+                <Button variant="ghost" className="w-full justify-start text-red-500" onClick={() => { handleLogout(); setIsMenuOpen(false) }}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Cerrar Sesión
+                </Button>
+              </>
+            ) : (
+              <Link href="/login" onClick={() => setIsMenuOpen(false)}>
+                <Button variant="outline" className="w-full justify-start border-primary/50 text-primary">
+                  <User className="mr-2 h-4 w-4" />
+                  Iniciar Sesión
+                </Button>
+              </Link>
+            )}
           </nav>
         </div>
       )}
