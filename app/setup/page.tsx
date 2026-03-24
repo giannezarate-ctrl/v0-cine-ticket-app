@@ -6,7 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 export default function SetupPage() {
   const [loading, setLoading] = useState(false)
+  const [loadingMovies, setLoadingMovies] = useState(false)
   const [result, setResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(null)
+  const [moviesResult, setMoviesResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(null)
 
   const runSetup = async () => {
     setLoading(true)
@@ -25,6 +27,28 @@ export default function SetupPage() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const addMovies = async () => {
+    setLoadingMovies(true)
+    setMoviesResult(null)
+    
+    try {
+      const response = await fetch('/api/movies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'seed' })
+      })
+      const data = await response.json()
+      setMoviesResult(data)
+    } catch (error) {
+      setMoviesResult({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Error desconocido' 
+      })
+    } finally {
+      setLoadingMovies(false)
     }
   }
 
@@ -75,6 +99,47 @@ export default function SetupPage() {
               <li>Test: test@test.com / test123</li>
             </ul>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Movies Section */}
+      <Card className="w-full max-w-md mt-4">
+        <CardHeader>
+          <CardTitle>Películas de Prueba</CardTitle>
+          <CardDescription>
+            Agrega películas de ejemplo a la cartelera
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 p-4 rounded-md">
+            <p className="text-sm text-blue-800">
+              <strong>Nota:</strong> Este proceso agrega 5 películas de ejemplo a la cartelera.
+              Solo necesitas ejecutarlo una vez.
+            </p>
+          </div>
+
+          <Button 
+            onClick={addMovies} 
+            disabled={loadingMovies}
+            className="w-full"
+          >
+            {loadingMovies ? 'Agregando...' : 'Agregar Películas'}
+          </Button>
+
+          {moviesResult && (
+            <div className={`p-4 rounded-md ${
+              moviesResult.success 
+                ? 'bg-green-50 border border-green-200 text-green-800' 
+                : 'bg-red-50 border border-red-200 text-red-800'
+            }`}>
+              <p className="font-medium">
+                {moviesResult.success ? '✓ Éxito' : '✗ Error'}
+              </p>
+              <p className="text-sm mt-1">
+                {moviesResult.message || moviesResult.error}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

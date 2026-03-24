@@ -14,7 +14,7 @@ export async function GET(request: Request) {
         FROM showtimes s
         JOIN movies m ON s.movie_id = m.id
         JOIN rooms r ON s.room_id = r.id
-        WHERE s.movie_id = ${movieId} AND s.is_active = true AND s.show_date >= CURRENT_DATE
+        WHERE s.movie_id = ${movieId} AND (s.is_active = true OR s.is_active IS NULL) AND s.show_date >= CURRENT_DATE
         ORDER BY s.show_date, s.show_time
       `
     } else {
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
         FROM showtimes s
         JOIN movies m ON s.movie_id = m.id
         JOIN rooms r ON s.room_id = r.id
-        WHERE s.is_active = true AND s.show_date >= CURRENT_DATE
+        WHERE (s.is_active = true OR s.is_active IS NULL) AND s.show_date >= CURRENT_DATE
         ORDER BY s.show_date, s.show_time
       `
     }

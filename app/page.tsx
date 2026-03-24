@@ -11,7 +11,7 @@ export const revalidate = 60
 async function getMovies(): Promise<Movie[]> {
   const movies = await sql`
     SELECT * FROM movies 
-    WHERE is_active = true 
+    WHERE is_active = true OR is_active IS NULL
     ORDER BY release_date DESC
   `
   return movies as Movie[]

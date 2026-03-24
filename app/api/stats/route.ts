@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 
 export async function GET() {
   try {
-    const moviesCount = await sql`SELECT COUNT(*) as count FROM movies WHERE is_active = true`
+    const moviesCount = await sql`SELECT COUNT(*) as count FROM movies WHERE is_active = true OR is_active IS NULL`
     const ticketsToday = await sql`
       SELECT COUNT(*) as count FROM tickets 
       WHERE DATE(purchase_date) = CURRENT_DATE
@@ -15,7 +15,7 @@ export async function GET() {
     `
     const showtimesToday = await sql`
       SELECT COUNT(*) as count FROM showtimes 
-      WHERE show_date = CURRENT_DATE AND is_active = true
+      WHERE show_date = CURRENT_DATE AND (is_active = true OR is_active IS NULL)
     `
     
     const recentTickets = await sql`
