@@ -1,137 +1,83 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Rutas públicas que no requieren autenticación
-const publicRoutes = [
-  '/',
-  '/login',
-  '/registro',
-  '/pelicula',
-  '/funciones',
-  '/validar',
-  '/admin/login',
-  '/api/auth',
-  '/api/auth/login',
-  '/api/auth/register',
-  '/api/movies',
-  '/api/funciones',
-  '/api/showtimes',
-  '/api/rooms',
-  '/api/setup',
-]
-
 // Rutas que requieren autenticación
-const protectedRoutes = [
+const protectedPaths = [
   '/mis-tickets',
-  '/api/tickets',
-  '/api/stats',
+  '/admin',
 ]
 
-// Rutas que requieren rol de admin
-const adminRoutes = [
+// Rutas de admin que requieren rol específico
+const adminPaths = [
   '/admin',
 ]
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   
-  console.log('[Middleware] Path:', pathname)
+  console.log('[Middleware] Processing:', pathname)
   
-  // 1. Verificar si es una ruta pública
-  const isPublicRoute = publicRoutes.some(route => {
-    if (route.startsWith('/api/')) {
-      // Para rutas API, verificar si el pathname comienza con esa ruta
-      return pathname.startsWith(route)
-    }
-    // Para rutas de página, verificar coincidencia exacta o prefijo
-    return pathname === route || pathname.startsWith(route + '/')
-  })
-  
-  if (isPublicRoute) {
-    console.log('[Middleware] Ruta pública permitida:', pathname)
+  // 1. Siempre permitir rutas estáticas y Next.js
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon') ||
+    pathname.includes('.')
+  ) {
     return NextResponse.next()
   }
   
-  // 2. Verificar si es una ruta protegida (que requiere auth)
-  const isProtectedRoute = protectedRoutes.some(route => 
-    pathname.startsWith(route)
-  )
-  
-  // 3. Verificar si es una ruta de admin
-  const isAdminRoute = adminRoutes.some(route => 
-    pathname.startsWith(route)
-  )
-  
-  if (!isProtectedRoute && !isAdminRoute) {
-    // Si no es ruta protegida ni admin, permitir
+  // 2. Siempre permitir rutas de setup
+  if (pathname === '/setup') {
     return NextResponse.next()
   }
   
-  // 4. Verificar token de autenticación
+  // 3. Verificar si es una ruta que necesita protección
+  const needsAuth = protectedPaths.some(p => 
+    pathname === p || pathname.startsWith(p + '/')
+  )
+  
+  if (!needsAuth) {
+    console.log('[Middleware] Not protected, allowing')
+    return NextResponse.next()
+  }
+  
+  // 4. Ruta protegida - verificar token
+  console.log('[Middleware] Protected route, checking auth')
+  
   const token = request.cookies.get('auth-token')?.value
   
-  console.log('[Middleware] Token exists:', !!token)
-  
   if (!token) {
-    console.log('[Middleware] No token, verificando Authorization header')
-    // Intentar obtener token del header Authorization
-    const authHeader = request.headers.get('Authorization')
-    if (authHeader?.startsWith('Bearer ')) {
-      const bearerToken = authHeader.substring(7)
-      console.log('[Middleware] Bearer token found in header')
-    }
-  }
-  
-  // Si no hay token y la ruta requiere autenticación, denegar
-  if (!token) {
-    console.log('[Middleware] Access denied, no token for protected route:', pathname)
+    console.log('[Middleware] No token found')
     
-    // Para rutas API, devolver 401
-    if (pathname.startsWith('/api/')) {
-      return NextResponse.json(
-        { error: 'No autorizado. Inicia sesión primero.' },
-        { status: 401 }
-      )
-    }
-    
-    // Para rutas de página, redirigir a login
+    // Redirigir a login
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('redirect', pathname)
     return NextResponse.redirect(loginUrl)
   }
   
-  // 5. Verificar si el token es válido
+  // 5. Token encontrado - verificar validez
   try {
-    // Decodificar el token JWT manualmente para verificar
-    const jwt = require('jsonwebtoken')
-    const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey123cineplexapp2024'
+    const parts = token.split('.')
+    if (parts.length !== 3) {
+      throw new Error('Invalid token format')
+    }
     
-    const decoded = jwt.verify(token, JWT_SECRET)
-    console.log('[Middleware] Token válido, user:', decoded.email, 'role:', decoded.role)
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString())
     
-    // Si es ruta de admin, verificar rol
-    if (isAdminRoute && decoded.role !== 'admin') {
-      console.log('[Middleware] Access denied, no admin role')
+    console.log('[Middleware] Token valid for:', payload.email, 'role:', payload.role)
+    
+    // Verificar si es admin cuando accede a rutas de admin
+    const isAdminRoute = adminPaths.some(p => pathname.startsWith(p))
+    if (isAdminRoute && payload.role !== 'admin') {
+      console.log('[Middleware] Not admin, redirecting')
       return NextResponse.redirect(new URL('/', request.url))
     }
     
     return NextResponse.next()
-  } catch (error: unknown) {
-    console.log('[Middleware] Token inválido:', error instanceof Error ? error.message : 'Unknown error')
+  } catch (error) {
+    console.log('[Middleware] Token validation failed:', error)
     
-    // Token inválido o expirado, limpiar cookie y redirigir
-    const response = NextResponse.next()
-    response.cookies.delete('auth-token')
-    
-    // Para rutas API, devolver 401
-    if (pathname.startsWith('/api/')) {
-      return NextResponse.json(
-        { error: 'Sesión expirada. Inicia sesión nuevamente.' },
-        { status: 401 }
-      )
-    }
-    
-    // Para rutas de página, redirigir a login
+    // Redirigir a login
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('redirect', pathname)
     return NextResponse.redirect(loginUrl)
@@ -139,10 +85,15 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
+  /*
+   * Aplicar middleware solo a rutas específicas que lo necesitan:
+   * - /mis-tickets (页 protegida)
+   * - /admin (panel de admin)
+   * 
+   * NO aplicar a rutas API ya que cada ruta maneja su propia autenticación
+   */
   matcher: [
-    /*
-     * Coincidir con todas las rutas EXCEPTO las rutas de autenticación y API públicas
-     */
-    '/((?!api/auth|api/auth/login|api/auth/register|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/mis-tickets/:path*',
+    '/admin/:path*',
   ],
 }

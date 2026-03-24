@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@/lib/db'
-import { hashPassword, comparePassword, generateToken, setAuthCookie, getCurrentUser } from '@/lib/auth'
+import { hashPassword, comparePassword, generateToken, setAuthCookie, getCurrentUser, removeAuthCookie } from '@/lib/auth'
 
+// GET handler para verificar auth
 export async function GET(request: Request) {
   try {
+    console.log('[Auth API] GET request received')
+    
     const { searchParams } = new URL(request.url)
     const action = searchParams.get('action')
+    
+    console.log('[Auth API] Action:', action)
     
     if (action === 'me') {
       return await getMe()
@@ -13,15 +18,21 @@ export async function GET(request: Request) {
     
     return NextResponse.json({ error: 'Acción no válida' }, { status: 400 })
   } catch (error) {
-    console.error('Auth error:', error)
+    console.error('[Auth API] GET error:', error)
     return NextResponse.json({ error: 'Error en autenticación' }, { status: 500 })
   }
 }
 
+// POST handler para login, register, logout
 export async function POST(request: Request) {
   try {
+    console.log('[Auth API] POST request received')
+    
     const body = await request.json()
     const { action } = body
+    
+    console.log('[Auth API] Action:', action)
+    console.log('[Auth API] Body keys:', Object.keys(body))
 
     if (action === 'register') {
       return await register(body)
@@ -35,7 +46,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: 'Acción no válida' }, { status: 400 })
   } catch (error) {
-    console.error('Auth error:', error)
+    console.error('[Auth API] POST error:', error)
     return NextResponse.json({ error: 'Error en autenticación' }, { status: 500 })
   }
 }
