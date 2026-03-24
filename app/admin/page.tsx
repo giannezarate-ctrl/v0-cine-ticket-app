@@ -83,6 +83,17 @@ export default function AdminPage() {
   const [movieDialogOpen, setMovieDialogOpen] = useState(false)
   const [showtimeDialogOpen, setShowtimeDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  
+  // Edit movie states
+  const [editMovie, setEditMovie] = useState<Movie | null>(null)
+  const [editMovieDialogOpen, setEditMovieDialogOpen] = useState(false)
+  
+  // Room management states
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
+  const [roomSeats, setRoomSeats] = useState<{row: string, number: number, status: string}[]>([])
+  
+  // Sales filter
+  const [salesMovieFilter, setSalesMovieFilter] = useState<string>('all')
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -210,6 +221,72 @@ export default function AdminPage() {
     }
   }
 
+  const handleEditMovie = (movie: Movie) => {
+    setEditMovie(movie)
+    setEditMovieDialogOpen(true)
+  }
+
+  const handleUpdateMovie = async () => {
+    if (!editMovie) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/movies/${editMovie.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editMovie.title,
+          genre: editMovie.genre,
+          duration: editMovie.duration,
+          rating: editMovie.rating,
+          synopsis: editMovie.synopsis,
+          poster_url: editMovie.poster_url,
+          trailer_url: editMovie.trailer_url,
+          release_date: editMovie.release_date,
+          is_active: editMovie.is_active
+        })
+      })
+      
+      if (res.ok) {
+        setEditMovieDialogOpen(false)
+        setEditMovie(null)
+        fetchData()
+      }
+    } catch (error) {
+      console.error('Error updating movie:', error)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRoomSelect = async (room: Room) => {
+    setSelectedRoom(room)
+    // Fetch tickets for this room to see occupied seats
+    try {
+      const res = await fetch('/api/tickets')
+      if (res.ok) {
+        const allTickets = await res.json()
+        // Generate seat map
+        const seats: {row: string, number: number, status: string}[] = []
+        const rows = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, room.rows_count)
+        for (const row of rows) {
+          for (let num = 1; num <= room.seats_per_row; num++) {
+            const hasTicket = allTickets.some((t: Ticket) => 
+              t.seat_row === row && t.seat_number === num
+            )
+            seats.push({
+              row,
+              number: num,
+              status: hasTicket ? 'occupied' : 'available'
+            })
+          }
+        }
+        setRoomSeats(seats)
+      }
+    } catch (error) {
+      console.error('Error fetching room seats:', error)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -256,7 +333,7 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-8 grid w-full grid-cols-4 bg-secondary md:w-auto md:grid-cols-4">
+          <TabsList className="mb-8 grid w-full grid-cols-5 bg-secondary md:w-auto md:grid-cols-5">
             <TabsTrigger value="dashboard" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <BarChart3 className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Dashboard</span>
@@ -268,6 +345,10 @@ export default function AdminPage() {
             <TabsTrigger value="funciones" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <Calendar className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Funciones</span>
+            </TabsTrigger>
+            <TabsTrigger value="salas" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <Users className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Salas</span>
             </TabsTrigger>
             <TabsTrigger value="ventas" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <TicketIcon className="mr-2 h-4 w-4" />
@@ -558,7 +639,12 @@ export default function AdminPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="flex-1 border-border">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1 border-border"
+                        onClick={() => handleEditMovie(movie)}
+                      >
                         <Pencil className="mr-2 h-3 w-3" />
                         Editar
                       </Button>
@@ -576,6 +662,107 @@ export default function AdminPage() {
               ))}
             </div>
           </TabsContent>
+
+          {/* Edit Movie Dialog */}
+          <Dialog open={editMovieDialogOpen} onOpenChange={setEditMovieDialogOpen}>
+            <DialogContent className="border-border bg-card max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="text-foreground">Editar Película</DialogTitle>
+                <DialogDescription>
+                  Modifica los datos de la película.
+                </DialogDescription>
+              </DialogHeader>
+              {editMovie && (
+                <div className="grid gap-4 py-4">
+                  <Input 
+                    placeholder="Título de la película" 
+                    className="border-border bg-input"
+                    value={editMovie.title}
+                    onChange={(e) => setEditMovie({...editMovie, title: e.target.value})}
+                  />
+                  <Textarea 
+                    placeholder="Sinopsis" 
+                    className="border-border bg-input"
+                    value={editMovie.synopsis}
+                    onChange={(e) => setEditMovie({...editMovie, synopsis: e.target.value})}
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input 
+                      placeholder="Duración (min)" 
+                      type="number" 
+                      className="border-border bg-input"
+                      value={editMovie.duration}
+                      onChange={(e) => setEditMovie({...editMovie, duration: parseInt(e.target.value)})}
+                    />
+                    <Select 
+                      value={editMovie.genre} 
+                      onValueChange={(v) => setEditMovie({...editMovie, genre: v})}
+                    >
+                      <SelectTrigger className="border-border bg-input">
+                        <SelectValue placeholder="Género" />
+                      </SelectTrigger>
+                      <SelectContent className="border-border bg-card">
+                        <SelectItem value="Acción">Acción</SelectItem>
+                        <SelectItem value="Drama">Drama</SelectItem>
+                        <SelectItem value="Ciencia Ficción">Ciencia Ficción</SelectItem>
+                        <SelectItem value="Thriller">Thriller</SelectItem>
+                        <SelectItem value="Comedia">Comedia</SelectItem>
+                        <SelectItem value="Terror">Terror</SelectItem>
+                        <SelectItem value="Animación">Animación</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Select 
+                    value={editMovie.rating} 
+                    onValueChange={(v) => setEditMovie({...editMovie, rating: v})}
+                  >
+                    <SelectTrigger className="border-border bg-input">
+                      <SelectValue placeholder="Clasificación" />
+                    </SelectTrigger>
+                    <SelectContent className="border-border bg-card">
+                      <SelectItem value="TP">TP - Todo Público</SelectItem>
+                      <SelectItem value="+7">+7</SelectItem>
+                      <SelectItem value="+12">+12</SelectItem>
+                      <SelectItem value="+15">+15</SelectItem>
+                      <SelectItem value="+18">+18</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input 
+                    placeholder="URL del poster" 
+                    className="border-border bg-input"
+                    value={editMovie.poster_url}
+                    onChange={(e) => setEditMovie({...editMovie, poster_url: e.target.value})}
+                  />
+                  <Input 
+                    type="date" 
+                    className="border-border bg-input"
+                    value={editMovie.release_date}
+                    onChange={(e) => setEditMovie({...editMovie, release_date: e.target.value})}
+                  />
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="is_active"
+                      checked={editMovie.is_active}
+                      onChange={(e) => setEditMovie({...editMovie, is_active: e.target.checked})}
+                      className="h-4 w-4"
+                    />
+                    <label htmlFor="is_active" className="text-sm text-foreground">
+                      Película activa (visible en cartelera)
+                    </label>
+                  </div>
+                  <Button 
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    onClick={handleUpdateMovie}
+                    disabled={saving}
+                  >
+                    {saving ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                    Guardar Cambios
+                  </Button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
 
           {/* Functions Tab */}
           <TabsContent value="funciones" className="space-y-6">
@@ -684,10 +871,157 @@ export default function AdminPage() {
             </Card>
           </TabsContent>
 
+          {/* Rooms Tab */}
+          <TabsContent value="salas" className="space-y-6">
+            <h2 className="text-xl font-bold text-foreground">Administración de Salas</h2>
+            
+            <div className="grid gap-6 lg:grid-cols-3">
+              {/* Room List */}
+              <Card className="border-border bg-card">
+                <CardHeader>
+                  <CardTitle className="text-foreground">Salas Disponibles</CardTitle>
+                  <CardDescription>Selecciona una sala para ver sus asientos</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {rooms.map((room) => (
+                    <div 
+                      key={room.id}
+                      className={`flex items-center justify-between rounded-lg border p-4 cursor-pointer transition-colors ${
+                        selectedRoom?.id === room.id 
+                          ? 'border-primary bg-primary/10' 
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                      onClick={() => handleRoomSelect(room)}
+                    >
+                      <div>
+                        <p className="font-medium text-foreground">{room.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {room.rows_count} filas x {room.seats_per_row} asientos
+                        </p>
+                      </div>
+                      <Badge variant="outline">{room.total_seats} asientos</Badge>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Seat Map */}
+              <Card className="border-border bg-card lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-foreground">
+                    {selectedRoom ? `Asientos - ${selectedRoom.name}` : 'Selecciona una sala'}
+                  </CardTitle>
+                  <CardDescription>
+                    Visualiza el estado de los asientos en cada sala
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {selectedRoom ? (
+                    <div className="space-y-4">
+                      {/* Screen indicator */}
+                      <div className="mx-auto w-3/4 rounded-lg bg-gradient-to-r from-transparent via-primary/30 to-transparent py-2 text-center text-xs text-muted-foreground">
+                        PANTALLA
+                      </div>
+                      
+                      {/* Seat grid */}
+                      <div className="flex flex-col items-center gap-2">
+                        {Array.from(new Set(roomSeats.map(s => s.row))).map((row) => (
+                          <div key={row} className="flex items-center gap-1">
+                            <span className="w-6 text-xs text-muted-foreground">{row}</span>
+                            <div className="flex gap-1">
+                              {roomSeats
+                                .filter(s => s.row === row)
+                                .sort((a, b) => a.number - b.number)
+                                .map((seat) => (
+                                  <div
+                                    key={`${seat.row}${seat.number}`}
+                                    className={`h-8 w-8 rounded-t-lg text-xs flex items-center justify-center ${
+                                      seat.status === 'occupied'
+                                        ? 'bg-destructive/50 text-destructive-foreground cursor-not-allowed'
+                                        : 'bg-cinema-green/50 text-cinema-green hover:bg-cinema-green'
+                                    }`}
+                                    title={`Asiento ${seat.row}${seat.number} - ${seat.status === 'occupied' ? 'Ocupado' : 'Disponible'}`}
+                                  >
+                                    {seat.number}
+                                  </div>
+                                ))}
+                            </div>
+                            <span className="w-6 text-xs text-muted-foreground">{row}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Legend */}
+                      <div className="flex justify-center gap-6 pt-4">
+                        <div className="flex items-center gap-2">
+                          <div className="h-4 w-4 rounded bg-cinema-green/50"></div>
+                          <span className="text-sm text-muted-foreground">Disponible</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-4 w-4 rounded bg-destructive/50"></div>
+                          <span className="text-sm text-muted-foreground">Ocupado</span>
+                        </div>
+                      </div>
+
+                      {/* Stats */}
+                      <div className="mt-4 flex justify-center gap-8 border-t pt-4">
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-cinema-green">
+                            {roomSeats.filter(s => s.status === 'available').length}
+                          </p>
+                          <p className="text-xs text-muted-foreground">Disponibles</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-destructive">
+                            {roomSeats.filter(s => s.status === 'occupied').length}
+                          </p>
+                          <p className="text-xs text-muted-foreground">Ocupados</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-foreground">{roomSeats.length}</p>
+                          <p className="text-xs text-muted-foreground">Total</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex h-64 items-center justify-center">
+                      <p className="text-muted-foreground">Selecciona una sala para ver sus asientos</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
           {/* Sales Tab */}
           <TabsContent value="ventas" className="space-y-6">
             <h2 className="text-xl font-bold text-foreground">Historial de Ventas</h2>
             
+            {/* Filter by movie */}
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <CardTitle className="text-foreground">Filtrar por Película</CardTitle>
+                <CardDescription>Ver tickets vendidos por película específica</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-4">
+                  <Select value={salesMovieFilter} onValueChange={setSalesMovieFilter}>
+                    <SelectTrigger className="border-border bg-input w-full md:w-[300px]">
+                      <SelectValue placeholder="Todas las películas" />
+                    </SelectTrigger>
+                    <SelectContent className="border-border bg-card">
+                      <SelectItem value="all">Todas las películas</SelectItem>
+                      {movies.map((movie) => (
+                        <SelectItem key={movie.id} value={movie.id.toString()}>
+                          {movie.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="border-border bg-card">
               <CardContent className="pt-6">
                 <Table>
@@ -702,7 +1036,9 @@ export default function AdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {tickets.map((ticket) => (
+                    {tickets
+                      .filter(ticket => salesMovieFilter === 'all' || (ticket as any).movie_id?.toString() === salesMovieFilter)
+                      .map((ticket) => (
                       <TableRow key={ticket.id} className="border-border">
                         <TableCell className="font-mono text-primary">{ticket.ticket_code}</TableCell>
                         <TableCell className="text-foreground">{ticket.movie_title}</TableCell>

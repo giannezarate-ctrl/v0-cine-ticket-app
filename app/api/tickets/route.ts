@@ -13,7 +13,7 @@ function generateTicketCode(): string {
 export async function GET() {
   try {
     const tickets = await sql`
-      SELECT t.*, m.title as movie_title, s.show_date, s.show_time, r.name as room_name
+      SELECT t.*, m.title as movie_title, m.id as movie_id, s.show_date, s.show_time, r.name as room_name
       FROM tickets t
       JOIN showtimes s ON t.showtime_id = s.id
       JOIN movies m ON s.movie_id = m.id
