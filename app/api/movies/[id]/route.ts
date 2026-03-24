@@ -37,8 +37,12 @@ export async function PUT(
           rating = ${rating}, synopsis = ${synopsis}, poster_url = ${poster_url},
           trailer_url = ${trailer_url}, release_date = ${release_date}, is_active = ${is_active}
       WHERE id = ${id}
-      RETURNING *
+      RETURNING id, title, genre, duration, rating, synopsis, poster_url, trailer_url, release_date, is_active, created_at
     `
+    
+    if (result.length === 0) {
+      return NextResponse.json({ error: 'Movie not found' }, { status: 404 })
+    }
     
     return NextResponse.json(result[0])
   } catch (error) {
@@ -53,7 +57,16 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    await sql`DELETE FROM movies WHERE id = ${id}`
+    
+    const result = await sql`
+      DELETE FROM movies WHERE id = ${id}
+      RETURNING id
+    `
+    
+    if (result.length === 0) {
+      return NextResponse.json({ error: 'Movie not found' }, { status: 404 })
+    }
+    
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting movie:', error)

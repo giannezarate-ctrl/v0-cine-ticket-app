@@ -13,26 +13,29 @@ export async function GET() {
     const tickets = await sql`
       SELECT 
         t.id,
-        t.ticket_code as codigo,
-        t.showtime_id as funcion_id,
-        t.seat_row as fila,
-        t.seat_number as columna,
-        t.price as precio,
+        t.code as codigo,
+        t.total as precio,
         t.status as estado,
-        t.customer_name as comprador_nombre,
-        t.customer_email as comprador_email,
-        t.is_validated as validado,
-        t.purchase_date as created_at,
-        s.show_date,
-        s.show_time,
+        t.created_at as purchase_date,
+        s.start_time as show_time,
         m.title as movie_title,
-        r.name as room_name
+        m.poster_url as movie_poster,
+        r.name as room_name,
+        COALESCE(
+          JSON_AGG(
+            JSON_BUILD_OBJECT('row', s2.row, 'number', s2.number)
+          ) FILTER (WHERE s2.id IS NOT NULL),
+          '[]'::json
+        ) as seats
       FROM tickets t
       JOIN showtimes s ON t.showtime_id = s.id
       LEFT JOIN movies m ON s.movie_id = m.id
       LEFT JOIN rooms r ON s.room_id = r.id
-      WHERE t.customer_email = ${user.email}
-      ORDER BY t.purchase_date DESC
+      LEFT JOIN ticket_seats ts ON t.id = ts.ticket_id
+      LEFT JOIN seats s2 ON ts.seat_id = s2.id
+      WHERE t.user_id = ${user.id}
+      GROUP BY t.id, s.start_time, m.title, m.poster_url, r.name
+      ORDER BY t.created_at DESC
     `
 
     return NextResponse.json(tickets)
