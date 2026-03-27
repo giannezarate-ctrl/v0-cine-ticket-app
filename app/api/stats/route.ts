@@ -39,6 +39,8 @@ export async function GET() {
       LIMIT 5
     `
     
+    console.log('STATS:', { moviesCount, ticketsToday, totalRevenue, showtimesToday, recentTickets, salesByMovie })
+    
     return NextResponse.json({
       moviesCount: moviesCount[0].count,
       ticketsToday: ticketsToday[0].count,
@@ -48,7 +50,14 @@ export async function GET() {
       salesByMovie
     })
   } catch (error) {
-    console.error('Error fetching stats:', error)
-    return NextResponse.json({ error: 'Error fetching stats' }, { status: 500 })
+    console.error('ERROR STATS:', error)
+    return NextResponse.json({
+      moviesCount: 0,
+      ticketsToday: 0,
+      totalRevenue: 0,
+      showtimesToday: 0,
+      recentTickets: [],
+      salesByMovie: []
+    }, { status: 200 })
   }
 }

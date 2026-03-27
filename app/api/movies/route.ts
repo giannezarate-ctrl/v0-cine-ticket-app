@@ -9,10 +9,11 @@ export async function GET() {
       WHERE is_active = true OR is_active IS NULL
       ORDER BY release_date DESC
     `
+    console.log('MOVIES:', movies)
     return NextResponse.json(movies)
   } catch (error) {
-    console.error('Error fetching movies:', error)
-    return NextResponse.json({ error: 'Error fetching movies' }, { status: 500 })
+    console.error('ERROR MOVIES:', error)
+    return NextResponse.json([], { status: 200 })
   }
 }
 

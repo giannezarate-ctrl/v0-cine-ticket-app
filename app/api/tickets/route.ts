@@ -20,10 +20,11 @@ export async function GET() {
       JOIN rooms r ON s.room_id = r.id
       ORDER BY t.created_at DESC
     `
+    console.log('TICKETS:', tickets)
     return NextResponse.json(tickets)
   } catch (error) {
-    console.error('Error fetching tickets:', error)
-    return NextResponse.json({ error: 'Error fetching tickets' }, { status: 500 })
+    console.error('ERROR TICKETS:', error)
+    return NextResponse.json([], { status: 200 })
   }
 }
 

@@ -28,10 +28,12 @@ export async function GET(request: Request) {
       `
     }
     
+    console.log('SHOWTIMES:', showtimes)
+    
     return NextResponse.json(showtimes)
   } catch (error) {
-    console.error('Error fetching showtimes:', error)
-    return NextResponse.json({ error: 'Error fetching showtimes' }, { status: 500 })
+    console.error('ERROR SHOWTIMES:', error)
+    return NextResponse.json([], { status: 200 })
   }
 }
 

@@ -99,7 +99,9 @@ export default function FuncionesPage() {
   const showtimesByDate = useMemo(() => {
     if (!funciones) return {}
     
-    return funciones.reduce((acc, showtime) => {
+    const funcionesArray = Array.isArray(funciones) ? funciones : []
+    
+    return funcionesArray.reduce((acc, showtime) => {
       const dateKey = showtime.date?.split('T')[0]
       if (!dateKey) return acc
       if (!acc[dateKey]) {

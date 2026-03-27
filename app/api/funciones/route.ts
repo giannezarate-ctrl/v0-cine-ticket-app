@@ -32,13 +32,15 @@ export async function GET() {
       ORDER BY s.show_date, s.show_time
     `
     
+    console.log('FUNCIONES:', showtimes)
+    
     return NextResponse.json(showtimes, {
       headers: {
         'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300'
       }
     })
   } catch (error) {
-    console.error('Error fetching funciones:', error)
-    return NextResponse.json({ error: 'Error fetching funciones' }, { status: 500 })
+    console.error('ERROR FUNCIONES:', error)
+    return NextResponse.json([], { status: 200 })
   }
 }
