@@ -3,7 +3,7 @@ import { neon } from '@neondatabase/serverless'
 export const sql = neon(process.env.DATABASE_URL!)
 
 export interface Movie {
-  id: number
+  id: string
   title: string
   genre: string
   duration: number
@@ -17,39 +17,43 @@ export interface Movie {
 }
 
 export interface Room {
-  id: number
+  id: string
   name: string
-  rows_count: number
-  seats_per_row: number
-  total_seats: number
+  capacity: number
+  created_at: string
+  seats?: Seat[]
+}
+
+export interface Seat {
+  id: string
+  room_id: string
+  row: string
+  number: number
+  created_at: string
 }
 
 export interface Showtime {
-  id: number
-  movie_id: number
-  room_id: number
-  show_date: string
-  show_time: string
+  id: string
+  movie_id: string
+  room_id: string
+  start_time: string
   price: number
-  is_active: boolean
+  created_at: string
   movie_title?: string
   movie_poster?: string
   room_name?: string
 }
 
 export interface Ticket {
-  id: number
-  showtime_id: number
-  seat_row: string
-  seat_number: number
-  ticket_code: string
-  customer_name: string
-  customer_email: string
-  purchase_date: string
-  is_validated: boolean
-  validated_at: string | null
+  id: string
+  user_id: string | null
+  showtime_id: string
+  code: string
+  total: number
+  status: 'active' | 'used' | 'cancelled'
+  created_at: string
+  validated_at?: string
   movie_title?: string
-  show_date?: string
   show_time?: string
   room_name?: string
 }

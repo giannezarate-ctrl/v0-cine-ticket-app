@@ -130,9 +130,8 @@ export default function LoginPage() {
         description: 'Bienvenido a CinePlex. Ya puedes iniciar sesión.',
       })
 
-      // Switch to login tab
-      const loginTab = document.getElementById('login-tab') as HTMLButtonElement
-      if (loginTab) loginTab.click()
+      // Redirect to login page
+      router.push('/login')
       
       // Clear register form
       setRegisterName('')

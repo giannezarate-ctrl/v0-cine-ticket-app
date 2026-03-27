@@ -84,6 +84,13 @@ export default function AdminPage() {
   const [showtimeDialogOpen, setShowtimeDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   
+  // Image upload states
+  const [newMovieImage, setNewMovieImage] = useState<File | null>(null)
+  const [newMovieImagePreview, setNewMovieImagePreview] = useState<string>('')
+  const [editMovieImage, setEditMovieImage] = useState<File | null>(null)
+  const [editMovieImagePreview, setEditMovieImagePreview] = useState<string>('')
+  const [uploadingImage, setUploadingImage] = useState(false)
+  
   // Edit movie states
   const [editMovie, setEditMovie] = useState<Movie | null>(null)
   const [editMovieDialogOpen, setEditMovieDialogOpen] = useState(false)
@@ -160,14 +167,72 @@ export default function AdminPage() {
     router.push('/admin/login')
   }
 
+  const toBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = error => reject(error)
+    })
+  }
+
+  const uploadImage = async (file: File): Promise<string> => {
+    setUploadingImage(true)
+    try {
+      const base64 = await toBase64(file)
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64 })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al subir imagen')
+      return data.url
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  const handleNewMovieImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setNewMovieImage(file)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setNewMovieImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleEditMovieImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setEditMovieImage(file)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setEditMovieImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
   const handleAddMovie = async () => {
     setSaving(true)
     try {
+      let posterUrl = newMovie.poster_url
+      
+      // Upload image if selected
+      if (newMovieImage) {
+        posterUrl = await uploadImage(newMovieImage)
+      }
+      
       const res = await fetch('/api/movies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...newMovie,
+          poster_url: posterUrl,
           duration: parseInt(newMovie.duration)
         })
       })
@@ -175,6 +240,8 @@ export default function AdminPage() {
       if (res.ok) {
         setMovieDialogOpen(false)
         setNewMovie({ title: '', genre: '', duration: '', rating: '', synopsis: '', poster_url: '', release_date: '' })
+        setNewMovieImage(null)
+        setNewMovieImagePreview('')
         fetchData()
       }
     } catch (error) {
@@ -230,6 +297,13 @@ export default function AdminPage() {
     if (!editMovie) return
     setSaving(true)
     try {
+      let posterUrl = editMovie.poster_url
+      
+      // Upload new image if selected
+      if (editMovieImage) {
+        posterUrl = await uploadImage(editMovieImage)
+      }
+      
       const res = await fetch(`/api/movies/${editMovie.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -239,7 +313,7 @@ export default function AdminPage() {
           duration: editMovie.duration,
           rating: editMovie.rating,
           synopsis: editMovie.synopsis,
-          poster_url: editMovie.poster_url,
+          poster_url: posterUrl,
           trailer_url: editMovie.trailer_url,
           release_date: editMovie.release_date,
           is_active: editMovie.is_active
@@ -249,6 +323,8 @@ export default function AdminPage() {
       if (res.ok) {
         setEditMovieDialogOpen(false)
         setEditMovie(null)
+        setEditMovieImage(null)
+        setEditMovieImagePreview('')
         fetchData()
       }
     } catch (error) {
@@ -594,12 +670,24 @@ export default function AdminPage() {
                         <SelectItem value="+18">+18</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Input 
-                      placeholder="URL del poster" 
-                      className="border-border bg-input"
-                      value={newMovie.poster_url}
-                      onChange={(e) => setNewMovie({...newMovie, poster_url: e.target.value})}
-                    />
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Poster de la película</label>
+                      <Input 
+                        type="file" 
+                        accept="image/*"
+                        className="border-border bg-input"
+                        onChange={handleNewMovieImageChange}
+                      />
+                      {newMovieImagePreview && (
+                        <div className="mt-2">
+                          <img 
+                            src={newMovieImagePreview} 
+                            alt="Preview" 
+                            className="w-full h-48 object-cover rounded-lg border border-border"
+                          />
+                        </div>
+                      )}
+                    </div>
                     <Input 
                       type="date" 
                       className="border-border bg-input"
@@ -609,9 +697,9 @@ export default function AdminPage() {
                     <Button 
                       className="bg-primary text-primary-foreground hover:bg-primary/90"
                       onClick={handleAddMovie}
-                      disabled={saving}
+                      disabled={saving || uploadingImage}
                     >
-                      {saving ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                      {(saving || uploadingImage) ? <Spinner className="mr-2 h-4 w-4" /> : null}
                       Guardar Película
                     </Button>
                   </div>
@@ -621,7 +709,16 @@ export default function AdminPage() {
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {movies.map((movie) => (
-                <Card key={movie.id} className="border-border bg-card">
+                <Card key={movie.id} className="border-border bg-card overflow-hidden">
+                  {movie.poster_url && (
+                    <div className="relative h-48 w-full">
+                      <img 
+                        src={movie.poster_url} 
+                        alt={movie.title}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div>
@@ -727,12 +824,33 @@ export default function AdminPage() {
                       <SelectItem value="+18">+18</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Input 
-                    placeholder="URL del poster" 
-                    className="border-border bg-input"
-                    value={editMovie.poster_url}
-                    onChange={(e) => setEditMovie({...editMovie, poster_url: e.target.value})}
-                  />
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Poster de la película</label>
+                    {editMovie.poster_url && !editMovieImagePreview && (
+                      <div className="mb-2">
+                        <img 
+                          src={editMovie.poster_url} 
+                          alt="Poster actual" 
+                          className="w-full h-48 object-cover rounded-lg border border-border"
+                        />
+                      </div>
+                    )}
+                    <Input 
+                      type="file" 
+                      accept="image/*"
+                      className="border-border bg-input"
+                      onChange={handleEditMovieImageChange}
+                    />
+                    {editMovieImagePreview && (
+                      <div className="mt-2">
+                        <img 
+                          src={editMovieImagePreview} 
+                          alt="Preview" 
+                          className="w-full h-48 object-cover rounded-lg border border-border"
+                        />
+                      </div>
+                    )}
+                  </div>
                   <Input 
                     type="date" 
                     className="border-border bg-input"
@@ -754,9 +872,9 @@ export default function AdminPage() {
                   <Button 
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
                     onClick={handleUpdateMovie}
-                    disabled={saving}
+                    disabled={saving || uploadingImage}
                   >
-                    {saving ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                    {(saving || uploadingImage) ? <Spinner className="mr-2 h-4 w-4" /> : null}
                     Guardar Cambios
                   </Button>
                 </div>
