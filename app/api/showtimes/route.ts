@@ -14,8 +14,8 @@ export async function GET(request: Request) {
         FROM showtimes s
         JOIN movies m ON s.movie_id = m.id
         JOIN rooms r ON s.room_id = r.id
-        WHERE s.movie_id = ${movieId} AND (s.start_time > NOW())
-        ORDER BY s.start_time
+        WHERE s.movie_id = ${movieId} AND s.is_active = true
+        ORDER BY s.show_date, s.show_time
       `
     } else {
       showtimes = await sql`
@@ -23,8 +23,8 @@ export async function GET(request: Request) {
         FROM showtimes s
         JOIN movies m ON s.movie_id = m.id
         JOIN rooms r ON s.room_id = r.id
-        WHERE s.start_time > NOW()
-        ORDER BY s.start_time
+        WHERE s.is_active = true
+        ORDER BY s.show_date, s.show_time
       `
     }
     
@@ -40,12 +40,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { movie_id, room_id, start_time, price } = body
+    const { movie_id, room_id, show_date, show_time, price } = body
     
     const result = await sql`
-      INSERT INTO showtimes (movie_id, room_id, start_time, price)
-      VALUES (${movie_id}, ${room_id}, ${start_time}, ${price})
-      RETURNING id, movie_id, room_id, start_time, price, created_at
+      INSERT INTO showtimes (movie_id, room_id, show_date, show_time, price)
+      VALUES (${movie_id}, ${room_id}, ${show_date}, ${show_time}, ${price})
+      RETURNING id, movie_id, room_id, show_date, show_time, price, is_active, created_at
     `
     return NextResponse.json(result[0], { status: 201 })
   } catch (error) {

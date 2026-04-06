@@ -36,8 +36,10 @@ export interface Showtime {
   id: string
   movie_id: string
   room_id: string
-  start_time: string
+  show_date: string
+  show_time: string
   price: number
+  is_active: boolean
   created_at: string
   movie_title?: string
   movie_poster?: string

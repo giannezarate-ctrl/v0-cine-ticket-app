@@ -8,36 +8,46 @@ export async function GET(
   try {
     const { id } = await params
     
-    // Get all seats with their status for this showtime
-    const seats = await sql`
-      SELECT 
-        s.id,
-        s.row, 
-        s.number,
-        ss.status
-      FROM seats s
-      JOIN rooms r ON s.room_id = r.id
-      LEFT JOIN showtime_seats ss ON s.id = ss.seat_id AND ss.showtime_id = ${id}
-      WHERE r.id IN (SELECT room_id FROM showtimes WHERE id = ${id})
-      ORDER BY s.row, s.number
-    `
-    
-    // Get the room for this showtime
-    const showtime = await sql`
-      SELECT r.id, r.name, r.capacity
+    // Get room info for this showtime
+    const showtimeData = await sql`
+      SELECT r.id, r.name, r.rows_count, r.seats_per_row
       FROM showtimes s
       JOIN rooms r ON s.room_id = r.id
       WHERE s.id = ${id}
     `
     
+    if (!showtimeData[0]) {
+      return NextResponse.json({ error: 'Showtime not found' }, { status: 404 })
+    }
+    
+    const { id: room_id, name, rows_count, seats_per_row } = showtimeData[0]
+    
+    // Get all booked seats for this showtime
+    const bookedSeats = await sql`
+      SELECT seat_row, seat_number
+      FROM tickets
+      WHERE showtime_id = ${id}
+    `
+    
+    const bookedSet = new Set(bookedSeats.map(t => `${t.seat_row}-${t.seat_number}`))
+    
+    // Generate all seats
+    const seats = []
+    for (let row = 0; row < rows_count; row++) {
+      const rowLetter = String.fromCharCode(65 + row)
+      for (let num = 1; num <= seats_per_row; num++) {
+        seats.push({
+          id: `${room_id}-${rowLetter}-${num}`,
+          row: rowLetter,
+          number: num,
+          status: bookedSet.has(`${rowLetter}-${num}`) ? 'occupied' : 'available'
+        })
+      }
+    }
+    
     return NextResponse.json({
-      showtime: showtime[0] || null,
-      seats: seats.map(seat => ({
-        id: seat.id,
-        row: seat.row,
-        number: seat.number,
-        status: seat.status || 'available'
-      }))
+      showtime: { id: room_id, name, total_seats: rows_count * seats_per_row },
+      seats
     })
   } catch (error) {
     console.error('Error fetching seats:', error)
