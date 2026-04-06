@@ -40,7 +40,17 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { movie_id, room_id, show_date, show_time, price } = body
+    console.log('POST showtimes body:', body)
+    
+    const movie_id = parseInt(body.movie_id)
+    const room_id = parseInt(body.room_id)
+    const show_date = body.show_date
+    const show_time = body.show_time
+    const price = parseInt(body.price) || 12000
+    
+    if (isNaN(movie_id) || isNaN(room_id) || !show_date || !show_time) {
+      return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 })
+    }
     
     const result = await sql`
       INSERT INTO showtimes (movie_id, room_id, show_date, show_time, price)
