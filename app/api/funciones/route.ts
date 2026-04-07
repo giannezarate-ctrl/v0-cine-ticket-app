@@ -42,11 +42,8 @@ export async function GET() {
 
     console.log('FUNCIONES:', mapped)
     
-    return NextResponse.json(mapped, {
-      headers: {
-        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300'
-      }
-    })
+    return NextResponse.json(mapped)
+
 
   } catch (error) {
     console.error('ERROR FUNCIONES:', error)
