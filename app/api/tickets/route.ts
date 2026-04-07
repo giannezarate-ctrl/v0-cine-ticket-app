@@ -13,15 +13,37 @@ function generateTicketCode(): string {
 export async function GET() {
   try {
     const tickets = await sql`
-      SELECT t.*, m.title as movie_title, s.start_time as show_time, r.name as room_name
+      SELECT 
+        t.*, 
+        m.title as movie_title, 
+        s.start_time as show_time, 
+        r.name as room_name,
+        u.name as customer_name,
+        (SELECT row FROM seats st JOIN ticket_seats ts ON st.id = ts.seat_id WHERE ts.ticket_id = t.id LIMIT 1) as seat_row,
+        (SELECT number FROM seats st JOIN ticket_seats ts ON st.id = ts.seat_id WHERE ts.ticket_id = t.id LIMIT 1) as seat_number
       FROM tickets t
       JOIN showtimes s ON t.showtime_id = s.id
       JOIN movies m ON s.movie_id = m.id
       JOIN rooms r ON s.room_id = r.id
+      LEFT JOIN users u ON t.user_id = u.id
       ORDER BY t.created_at DESC
     `
-    console.log('TICKETS:', tickets)
-    return NextResponse.json(tickets)
+
+    
+    // Map to compatibility fields
+    const mapped = tickets.map((t: any) => {
+      const dt = t.show_time ? new Date(t.show_time) : null
+      return {
+        ...t,
+        ticket_code: t.code,
+        is_validated: t.status === 'used',
+        show_date: dt ? dt.toISOString().split('T')[0] : null,
+        show_time: dt ? dt.toTimeString().slice(0, 5) : null
+      }
+    })
+
+    return NextResponse.json(mapped)
+
   } catch (error) {
     console.error('ERROR TICKETS:', error)
     return NextResponse.json([], { status: 200 })

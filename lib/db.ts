@@ -22,6 +22,9 @@ export interface Room {
   capacity: number
   created_at: string
   seats?: Seat[]
+  rows_count?: number
+  seats_per_row?: number
+  total_seats?: number
 }
 
 export interface Seat {
@@ -58,4 +61,10 @@ export interface Ticket {
   movie_title?: string
   show_time?: string
   room_name?: string
+  ticket_code?: string
+  customer_name?: string
+  seat_row?: string
+  seat_number?: number
+  is_validated?: boolean
+  show_date?: string
 }

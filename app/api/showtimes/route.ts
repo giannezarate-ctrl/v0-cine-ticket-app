@@ -64,7 +64,18 @@ export async function POST(request: Request) {
       RETURNING id, movie_id, room_id, start_time, price, created_at
     `
 
+    const showtimeId = result[0].id
+
+    // Initialize seats for this showtime
+    await sql`
+      INSERT INTO showtime_seats (showtime_id, seat_id, status)
+      SELECT ${showtimeId}, id, 'available'
+      FROM seats
+      WHERE room_id = ${room_id}
+    `
+
     const created = result[0]
+
     // Return also compatibility fields
     const createdDt = created?.start_time ? new Date(created.start_time) : null
     const payload = created ? {

@@ -259,8 +259,8 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...newShowtime,
-          movie_id: parseInt(newShowtime.movie_id),
-          room_id: parseInt(newShowtime.room_id),
+          movie_id: newShowtime.movie_id,
+          room_id: newShowtime.room_id,
           price: parseInt(newShowtime.price)
         })
       })
@@ -277,7 +277,7 @@ export default function AdminPage() {
     }
   }
 
-  const handleDeleteMovie = async (id: number) => {
+  const handleDeleteMovie = async (id: string) => {
     if (!confirm('¿Estás seguro de eliminar esta película?')) return
     
     try {
@@ -336,19 +336,26 @@ export default function AdminPage() {
 
   const handleRoomSelect = async (room: Room) => {
     setSelectedRoom(room)
-    // Fetch tickets for this room to see occupied seats
+    setRoomSeats([]) // Clear previous seats
+    // Fetch tickets to see occupied seats
     try {
       const res = await fetch('/api/tickets')
       if (res.ok) {
-        const allTickets = await res.json()
-        // Generate seat map
+        const allTickets: Ticket[] = await res.json()
+        
+        // Generate seat map based on room dimensions
         const seats: {row: string, number: number, status: string}[] = []
-        const rows = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, room.rows_count)
+        const rowsCount = room.rows_count || 10
+        const seatsPerRow = room.seats_per_row || 6
+        
+        const rows = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, rowsCount)
         for (const row of rows) {
-          for (let num = 1; num <= room.seats_per_row; num++) {
+          for (let num = 1; num <= seatsPerRow; num++) {
+            // Check if this specific seat in this specific room is occupied
             const hasTicket = allTickets.some((t: Ticket) => 
-              t.seat_row === row && t.seat_number === num
+              t.room_name === room.name && t.seat_row === row && t.seat_number === num
             )
+            
             seats.push({
               row,
               number: num,
@@ -357,9 +364,22 @@ export default function AdminPage() {
           }
         }
         setRoomSeats(seats)
+      } else {
+        console.error('Failed to fetch tickets:', res.statusText)
       }
     } catch (error) {
       console.error('Error fetching room seats:', error)
+      // Fallback: show empty seats if fetch fails
+      const seats: {row: string, number: number, status: string}[] = []
+      const rowsCount = room.rows_count || 10
+      const seatsPerRow = room.seats_per_row || 6
+      const rows = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, rowsCount)
+      for (const row of rows) {
+        for (let num = 1; num <= seatsPerRow; num++) {
+          seats.push({ row, number: num, status: 'available' })
+        }
+      }
+      setRoomSeats(seats)
     }
   }
 
