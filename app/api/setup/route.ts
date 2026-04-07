@@ -141,19 +141,26 @@ export async function POST(request: Request) {
       `
       roomIds[room.name] = roomResult.id
       
-      // Create seats for each room (Batching could be done here but simple loop for 160 seats is fine)
+      // Create seats for each room using batch insertion (UNNEST) for efficiency
       const seatsPerRow = room.name === 'Sala 3' ? 4 : 6
       const rowsCount = 10
+      const rows = []
+      const nums = []
       
       for (let r = 1; r <= rowsCount; r++) {
         const rowLetter = String.fromCharCode(64 + r)
         for (let s = 1; s <= seatsPerRow; s++) {
-          await sql`
-            INSERT INTO seats (room_id, row, number)
-            VALUES (${roomResult.id}, ${rowLetter}, ${s})
-          `
+          rows.push(rowLetter)
+          nums.push(s)
         }
       }
+
+      await sql`
+        INSERT INTO seats (room_id, row, number)
+        SELECT ${roomResult.id}, row_letter, seat_num
+        FROM UNNEST(${rows}::text[], ${nums}::int[]) AS t(row_letter, seat_num)
+      `
+
     }
 
     // Insert sample movies
