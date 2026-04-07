@@ -31,7 +31,8 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
   const [customerEmail, setCustomerEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [purchasing, setPurchasing] = useState(false)
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null)
+  const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string } | null>(null)
+
   const router = useRouter()
 
   const rowsCount = showtime.rows_count || 10
@@ -69,8 +70,13 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
         const res = await fetch(`/api/showtimes/${showtime.id}/seats`)
         if (res.ok) {
           const data = await res.json()
-          setOccupiedSeats(data)
+          // data.seats contains the array with status
+          const occupied = data.seats
+            .filter((s: any) => s.status === 'occupied')
+            .map((s: any) => ({ seat_row: s.row, seat_number: s.number }))
+          setOccupiedSeats(occupied)
         }
+
       } catch (error) {
         console.error('Error fetching seats:', error)
       } finally {
@@ -136,16 +142,19 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
         body: JSON.stringify({
           showtime_id: showtime.id,
           seats,
+          user_id: currentUser.id,
           customer_name: currentUser.name,
           customer_email: currentUser.email
         })
+
       })
 
       if (res.ok) {
-        const tickets = await res.json()
-        setTicketCodes(tickets.map((t: { ticket_code: string }) => t.ticket_code))
+        const ticket = await res.json()
+        setTicketCodes([ticket.code])
         setShowTicket(true)
       } else {
+
         const error = await res.json()
         alert(error.error || 'Error al procesar la compra')
       }

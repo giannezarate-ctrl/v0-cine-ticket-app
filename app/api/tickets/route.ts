@@ -53,19 +53,37 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { showtime_id, seat_ids, user_id, customer_name, customer_email } = body
+    const { showtime_id, seats, user_id, customer_name, customer_email } = body
 
-    // Get showtime price
+    // Get showtime and room info
     const showtimeResult = await sql`
-      SELECT price FROM showtimes WHERE id = ${showtime_id}
+      SELECT s.price, s.room_id 
+      FROM showtimes s 
+      WHERE s.id = ${showtime_id}
     `
-    const showtimePrice = showtimeResult[0]?.price
+    const { price: showtimePrice, room_id } = showtimeResult[0] || {}
 
     if (!showtimePrice) {
       return NextResponse.json({ error: 'Showtime not found' }, { status: 404 })
     }
 
-    // Check if seats are available
+    // Resolve coordinates into seat IDs
+    const seat_ids = []
+    for (const s of seats) {
+      const seatRes = await sql`
+        SELECT id FROM seats 
+        WHERE room_id = ${room_id} AND row = ${s.row} AND number = ${s.number}
+      `
+      if (seatRes[0]) {
+        seat_ids.push(seatRes[0].id)
+      }
+    }
+
+    if (seat_ids.length !== seats.length) {
+      return NextResponse.json({ error: 'Algunos asientos no existen en esta sala' }, { status: 400 })
+    }
+
+    // Check if seats are available in showtime_seats
     const unavailableSeats = await sql`
       SELECT ss.id, s.row, s.number
       FROM showtime_seats ss
@@ -81,6 +99,7 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
+
 
     // Create ticket
     const ticketCode = generateTicketCode()
@@ -107,13 +126,14 @@ export async function POST(request: Request) {
     }
 
     // Get seat details for response
-    const seats = await sql`
+    const ticketSeats = await sql`
       SELECT s.id, s.row, s.number
       FROM seats s
       WHERE s.id = ANY(${seat_ids})
     `
 
-    return NextResponse.json({ ...ticket, seats }, { status: 201 })
+    return NextResponse.json({ ...ticket, seats: ticketSeats }, { status: 201 })
+
   } catch (error) {
     console.error('Error creating tickets:', error)
     const message = error instanceof Error ? error.message : 'Error creating tickets'
