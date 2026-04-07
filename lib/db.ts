@@ -47,6 +47,8 @@ export interface Showtime {
   movie_title?: string
   movie_poster?: string
   room_name?: string
+  rows_count?: number
+  seats_per_row?: number
 }
 
 export interface Ticket {

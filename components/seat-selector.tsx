@@ -34,8 +34,11 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null)
   const router = useRouter()
 
-  const filas = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
-  const columnas = Array.from({ length: 15 }, (_, i) => i + 1)
+  const rowsCount = showtime.rows_count || 10
+  const seatsPerRow = showtime.seats_per_row || 6
+  const filas = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, rowsCount).split('')
+  const columnas = Array.from({ length: seatsPerRow }, (_, i) => i + 1)
+
 
   // Check authentication on mount
   useEffect(() => {

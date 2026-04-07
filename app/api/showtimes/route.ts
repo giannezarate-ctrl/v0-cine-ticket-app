@@ -9,7 +9,7 @@ export async function GET(request: Request) {
 
     if (movieId) {
       showtimes = await sql`
-        SELECT s.*, m.title as movie_title, m.poster_url as movie_poster, r.name as room_name
+        SELECT s.*, m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity
         FROM showtimes s
         JOIN movies m ON s.movie_id = m.id
         JOIN rooms r ON s.room_id = r.id
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
       `
     } else {
       showtimes = await sql`
-        SELECT s.*, m.title as movie_title, m.poster_url as movie_poster, r.name as room_name
+        SELECT s.*, m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity
         FROM showtimes s
         JOIN movies m ON s.movie_id = m.id
         JOIN rooms r ON s.room_id = r.id
@@ -33,13 +33,16 @@ export async function GET(request: Request) {
       return {
         ...s,
         show_date: dt ? dt.toISOString().split('T')[0] : null,
-        show_time: dt ? dt.toTimeString().slice(0,5) : null
+        show_time: dt ? dt.toTimeString().slice(0,5) : null,
+        rows_count: 10,
+        seats_per_row: Math.ceil((s.capacity || 0) / 10)
       }
     })
 
     console.log('SHOWTIMES:', mapped)
 
     return NextResponse.json(mapped)
+
   } catch (error) {
     console.error('ERROR SHOWTIMES:', error)
     return NextResponse.json([], { status: 200 })
