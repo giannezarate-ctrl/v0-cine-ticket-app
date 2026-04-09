@@ -10,10 +10,8 @@ export async function GET() {
         s.id,
         s.movie_id,
         s.room_id,
-        s.show_date as date,
-        s.show_time as time,
+        s.start_time,
         s.price,
-        s.is_active,
         r.name as room_name,
         m.id as m_id,
         m.title as m_title,
@@ -28,17 +26,25 @@ export async function GET() {
       FROM showtimes s
       JOIN movies m ON s.movie_id = m.id
       JOIN rooms r ON s.room_id = r.id
-      WHERE (s.is_active = true OR s.is_active IS NULL) AND s.show_date >= CURRENT_DATE
-      ORDER BY s.show_date, s.show_time
+      WHERE (m.is_active = true OR m.is_active IS NULL) AND s.start_time >= CURRENT_DATE
+      ORDER BY s.start_time
     `
     
-    console.log('FUNCIONES:', showtimes)
-    
-    return NextResponse.json(showtimes, {
-      headers: {
-        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300'
+    // Map to include date and time fields for the frontend
+    const mapped = showtimes.map((s: any) => {
+      const dt = new Date(s.start_time)
+      return {
+        ...s,
+        date: dt.toISOString().split('T')[0],
+        time: dt.toTimeString().slice(0, 5)
       }
     })
+
+    console.log('FUNCIONES:', mapped)
+    
+    return NextResponse.json(mapped)
+
+
   } catch (error) {
     console.error('ERROR FUNCIONES:', error)
     return NextResponse.json([], { status: 200 })

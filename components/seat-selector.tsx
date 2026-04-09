@@ -31,11 +31,33 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
   const [customerEmail, setCustomerEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [purchasing, setPurchasing] = useState(false)
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null)
+  const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string } | null>(null)
+
   const router = useRouter()
 
-  const filas = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
-  const columnas = Array.from({ length: 15 }, (_, i) => i + 1)
+  const rowsCount = showtime.rows_count || 10
+  const seatsPerRow = showtime.seats_per_row || 6
+  const filas = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, rowsCount).split('')
+  const columnas = Array.from({ length: seatsPerRow }, (_, i) => i + 1)
+
+  async function fetchOccupiedSeats() {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/showtimes/${showtime.id}/seats`)
+      if (res.ok) {
+        const data = await res.json()
+        const seatsArray = Array.isArray(data.seats) ? data.seats : []
+        const occupied = seatsArray
+          .filter((s: any) => s.status === 'occupied')
+          .map((s: any) => ({ seat_row: s.row, seat_number: s.number }))
+        setOccupiedSeats(occupied)
+      }
+    } catch (error) {
+      console.error('Error fetching seats:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Check authentication on mount
   useEffect(() => {
@@ -60,27 +82,13 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
   }, [])
 
   useEffect(() => {
-    async function fetchOccupiedSeats() {
-      setLoading(true)
-      try {
-        const res = await fetch(`/api/showtimes/${showtime.id}/seats`)
-        if (res.ok) {
-          const data = await res.json()
-          setOccupiedSeats(data)
-        }
-      } catch (error) {
-        console.error('Error fetching seats:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-    
     fetchOccupiedSeats()
     setSelectedSeats([])
   }, [showtime.id])
 
   const isSeatOccupied = (row: string, col: number) => {
-    return occupiedSeats.some(s => s.seat_row === row && s.seat_number === col)
+    if (!Array.isArray(occupiedSeats)) return false
+    return occupiedSeats.some(s => s && s.seat_row === row && s.seat_number === col)
   }
 
   const toggleSeat = (row: string, col: number) => {
@@ -133,16 +141,19 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
         body: JSON.stringify({
           showtime_id: showtime.id,
           seats,
+          user_id: currentUser.id,
           customer_name: currentUser.name,
           customer_email: currentUser.email
         })
+
       })
 
       if (res.ok) {
-        const tickets = await res.json()
-        setTicketCodes(tickets.map((t: { ticket_code: string }) => t.ticket_code))
+        const ticket = await res.json()
+        setTicketCodes([ticket.code])
         setShowTicket(true)
       } else {
+
         const error = await res.json()
         alert(error.error || 'Error al procesar la compra')
       }
@@ -358,10 +369,7 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
           setSelectedSeats([])
           setCustomerName('')
           setCustomerEmail('')
-          // Refresh occupied seats
-          fetch(`/api/showtimes/${showtime.id}/seats`)
-            .then(res => res.json())
-            .then(data => setOccupiedSeats(data))
+          fetchOccupiedSeats()
         }}
         ticketCodes={ticketCodes}
         movie={movie}

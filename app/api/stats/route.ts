@@ -19,11 +19,21 @@ export async function GET() {
     `
     
     const recentTickets = await sql`
-      SELECT t.*, m.title as movie_title, s.start_time, r.name as room_name
+      SELECT 
+        t.*, 
+        m.title as movie_title, 
+        s.start_time, 
+        r.name as room_name,
+        u.name as customer_name,
+        st.row as seat_row,
+        st.number as seat_number
       FROM tickets t
       JOIN showtimes s ON t.showtime_id = s.id
       JOIN movies m ON s.movie_id = m.id
       JOIN rooms r ON s.room_id = r.id
+      LEFT JOIN users u ON t.user_id = u.id
+      LEFT JOIN ticket_seats ts ON t.id = ts.ticket_id
+      LEFT JOIN seats st ON ts.seat_id = st.id
       ORDER BY t.created_at DESC
       LIMIT 10
     `
@@ -39,16 +49,23 @@ export async function GET() {
       LIMIT 5
     `
     
-    console.log('STATS:', { moviesCount, ticketsToday, totalRevenue, showtimesToday, recentTickets, salesByMovie })
+    // Map to compatibility fields
+    const mappedRecentTickets = recentTickets.map((t: any) => ({
+      ...t,
+      ticket_code: t.code,
+      is_validated: t.status === 'used'
+    }))
+
     
     return NextResponse.json({
       moviesCount: moviesCount[0].count,
       ticketsToday: ticketsToday[0].count,
       totalRevenue: totalRevenue[0].total,
       showtimesToday: showtimesToday[0].count,
-      recentTickets,
+      recentTickets: mappedRecentTickets,
       salesByMovie
     })
+
   } catch (error) {
     console.error('ERROR STATS:', error)
     return NextResponse.json({

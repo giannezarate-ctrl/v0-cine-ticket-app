@@ -126,37 +126,45 @@ export async function POST(request: Request) {
     await sql`CREATE INDEX IF NOT EXISTS idx_tickets_code ON tickets(code)`
     await sql`CREATE INDEX IF NOT EXISTS idx_tickets_user ON tickets(user_id)`
 
-    // Insert sample rooms with seats
+    // Insert sample rooms and collect IDs
     const rooms = [
       { name: 'Sala 1', capacity: 60 },
       { name: 'Sala 2', capacity: 60 },
       { name: 'Sala 3', capacity: 40 },
     ]
-
+    const roomIds: Record<string, string> = {}
     for (const room of rooms) {
       const [roomResult] = await sql`
         INSERT INTO rooms (name, capacity)
         VALUES (${room.name}, ${room.capacity})
         RETURNING id
       `
+      roomIds[room.name] = roomResult.id
       
-      // Create seats for each room (10 rows x 6 seats for Sala 1 & 2, 10 rows x 4 seats for Sala 3)
+      // Create seats for each room using batch insertion (UNNEST) for efficiency
       const seatsPerRow = room.name === 'Sala 3' ? 4 : 6
-      const rows = 10
+      const rowsCount = 10
+      const rows = []
+      const nums = []
       
-      for (let r = 1; r <= rows; r++) {
-        const rowLetter = String.fromCharCode(64 + r) // A, B, C, etc.
+      for (let r = 1; r <= rowsCount; r++) {
+        const rowLetter = String.fromCharCode(64 + r)
         for (let s = 1; s <= seatsPerRow; s++) {
-          await sql`
-            INSERT INTO seats (room_id, row, number)
-            VALUES (${roomResult.id}, ${rowLetter}, ${s})
-          `
+          rows.push(rowLetter)
+          nums.push(s)
         }
       }
+
+      await sql`
+        INSERT INTO seats (room_id, row, number)
+        SELECT ${roomResult.id}, row_letter, seat_num
+        FROM UNNEST(${rows}::text[], ${nums}::int[]) AS t(row_letter, seat_num)
+      `
+
     }
 
     // Insert sample movies
-    const movies = [
+    const moviesData = [
       { 
         title: 'Dune: Parte Dos', 
         genre: 'Ciencia Ficción', 
@@ -183,54 +191,26 @@ export async function POST(request: Request) {
         synopsis: 'Miles Morales regresa para una épica aventura que transportará al amigable vecino de Brooklyn a través del Multiverso.',
         poster_url: 'https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg',
         release_date: '2023-06-02'
-      },
-      { 
-        title: 'Wonka', 
-        genre: 'Fantasía', 
-        duration: 116, 
-        rating: 'PG', 
-        synopsis: 'Basada en el personaje de Roald Dahl, cuenta la historia de cómo Willy Wonka se convirtió en el famoso chocolatero.',
-        poster_url: 'https://image.tmdb.org/t/p/w500/qhb1qOilapbapxWQn9jtRCMwXJF.jpg',
-        release_date: '2023-12-15'
-      },
-      { 
-        title: 'Kung Fu Panda 4', 
-        genre: 'Animación', 
-        duration: 94, 
-        rating: 'PG', 
-        synopsis: 'Po debe entrenar a un nuevo guerrero mientras enfrenta a una villana que puede convocar espíritus de maestros caídos.',
-        poster_url: 'https://image.tmdb.org/t/p/w500/kDp1vUBnMpe8ak4rjgl3cLELqjU.jpg',
-        release_date: '2024-03-08'
-      },
-      { 
-        title: 'Godzilla x Kong: El Nuevo Imperio', 
-        genre: 'Acción', 
-        duration: 115, 
-        rating: 'PG-13', 
-        synopsis: 'Godzilla y Kong deben unirse contra una amenaza colosal escondida en nuestro mundo.',
-        poster_url: 'https://image.tmdb.org/t/p/w500/z1p34vh7dEOnLDmyCrlUVLuoDzd.jpg',
-        release_date: '2024-03-29'
-      },
+      }
     ]
 
-    for (const movie of movies) {
+    for (const movie of moviesData) {
       await sql`
         INSERT INTO movies (title, genre, duration, rating, synopsis, poster_url, release_date, is_active)
         VALUES (${movie.title}, ${movie.genre}, ${movie.duration}, ${movie.rating}, ${movie.synopsis}, ${movie.poster_url}, ${movie.release_date}, true)
       `
     }
 
-    // Get all movies and rooms to create showtimes
+    // Get all movies and rooms
     const allMovies = await sql`SELECT id FROM movies`
     const allRooms = await sql`SELECT id, name FROM rooms`
 
-    // Create showtimes for next 7 days
+    // Create showtimes and their seats (Optimized)
     for (const movie of allMovies) {
       for (const room of allRooms) {
-        // Create showtimes at 14:00, 17:00, 20:00, 22:30
-        const times = ['14:00', '17:00', '20:00', '22:30']
+        const times = ['16:00', '19:00', '22:00']
         
-        for (let day = 0; day < 7; day++) {
+        for (let day = 0; day < 3; day++) { // Reduced days to 3 for faster setup
           for (const time of times) {
             const startTime = new Date()
             startTime.setDate(startTime.getDate() + day)
@@ -239,25 +219,21 @@ export async function POST(request: Request) {
 
             const price = room.name === 'Sala 3' ? 18000 : 15000
 
-            await sql`
+            const [showtime] = await sql`
               INSERT INTO showtimes (movie_id, room_id, start_time, price)
               VALUES (${movie.id}, ${room.id}, ${startTime.toISOString()}, ${price})
+              RETURNING id
+            `
+
+            // Batch insert showtime_seats ONLY for seats in this room
+            await sql`
+              INSERT INTO showtime_seats (showtime_id, seat_id, status)
+              SELECT ${showtime.id}, id, 'available'
+              FROM seats
+              WHERE room_id = ${room.id}
             `
           }
         }
-      }
-    }
-
-    // Create all showtime_seats (all seats available initially)
-    const allShowtimes = await sql`SELECT id FROM showtimes`
-    const allSeats = await sql`SELECT id, room_id FROM seats`
-
-    for (const showtime of allShowtimes) {
-      for (const seat of allSeats) {
-        await sql`
-          INSERT INTO showtime_seats (showtime_id, seat_id, status)
-          VALUES (${showtime.id}, ${seat.id}, 'available')
-        `
       }
     }
 

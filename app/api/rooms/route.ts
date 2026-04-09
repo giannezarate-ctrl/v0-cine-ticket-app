@@ -4,8 +4,17 @@ import { NextResponse } from 'next/server'
 export async function GET() {
   try {
     const rooms = await sql`SELECT * FROM rooms ORDER BY name`
-    console.log('ROOMS:', rooms)
-    return NextResponse.json(rooms)
+    
+    const mappedRooms = rooms.map((room: any) => ({
+      ...room,
+      rows_count: 10,
+      seats_per_row: Math.ceil(room.capacity / 10),
+      total_seats: room.capacity
+    }))
+
+
+    return NextResponse.json(mappedRooms)
+
   } catch (error) {
     console.error('ERROR ROOMS:', error)
     return NextResponse.json([], { status: 200 })

@@ -12,9 +12,9 @@ import useSWR from 'swr'
 import { useMemo } from 'react'
 
 interface Funcion {
-  id: number
-  movie_id: number
-  room_id: number
+  id: string
+  movie_id: string
+  room_id: string
   date: string
   time: string
   price: number
@@ -33,9 +33,9 @@ interface Funcion {
 }
 
 const fetcher = (url: string) => fetch(url, { 
-  cache: 'force-cache',
-  next: { revalidate: 60 }
+  cache: 'no-store'
 }).then(res => res.json())
+
 
 const formatPrice = (price: number) => {
   return new Intl.NumberFormat('es-CO', {
