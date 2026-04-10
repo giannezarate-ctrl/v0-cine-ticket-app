@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Header } from '@/components/header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Ticket, CheckCircle2, XCircle, AlertCircle, Search, QrCode } from 'lucide-react'
+import { Ticket, CheckCircle2, XCircle, AlertCircle, Search, QrCode, Camera, CameraOff, Keyboard } from 'lucide-react'
+import { Html5QrcodeScanner } from 'html5-qrcode'
 
 interface TicketInfo {
   id: number
@@ -24,6 +25,7 @@ interface TicketInfo {
 }
 
 type ValidationStatus = 'idle' | 'valid' | 'used' | 'invalid'
+type InputMode = 'manual' | 'scanner'
 
 export default function ValidarPage() {
   const [code, setCode] = useState('')
@@ -31,11 +33,60 @@ export default function ValidarPage() {
   const [ticketInfo, setTicketInfo] = useState<TicketInfo | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [inputMode, setInputMode] = useState<InputMode>('manual')
+  const [scanning, setScanning] = useState(false)
+  const [hasCamera, setHasCamera] = useState(false)
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null)
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
     return date.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })
   }
+
+  const scannerRef2 = useRef<Html5QrcodeScanner | null>(null)
+
+  const startScanner = async () => {
+    setScanning(true)
+  }
+
+  const stopScanner = async () => {
+    if (scannerRef2.current) {
+      scannerRef2.current.clear().catch(() => {})
+    }
+    setScanning(false)
+  }
+
+  const handleScan = useCallback(async (decodedText: string) => {
+    stopScanner()
+    setCode(decodedText)
+    await handleValidate()
+  }, [code])
+
+  useEffect(() => {
+    if (!scanning || inputMode !== 'scanner') return
+
+    const scanner = new Html5QrcodeScanner(
+      'qr-reader',
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      false
+    )
+
+    scannerRef2.current = scanner
+
+    scanner.render(
+      (decodedText) => {
+        scanner.clear()
+        setCode(decodedText)
+        setScanning(false)
+        handleValidate()
+      },
+      () => {}
+    )
+
+    return () => {
+      scanner.clear().catch(() => {})
+    }
+  }, [scanning, inputMode])
 
   const handleValidate = async () => {
     if (!code.trim()) return
@@ -195,35 +246,92 @@ export default function ValidarPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex gap-3">
-                <Input
-                  placeholder="Ej: A1B2C3D4"
-                  value={code}
-                  onChange={(e) => {
-                    setCode(e.target.value.toUpperCase())
-                    setStatus('idle')
-                  }}
-                  className="flex-1 border-border bg-input font-mono text-foreground uppercase placeholder:text-muted-foreground"
-                  onKeyDown={(e) => e.key === 'Enter' && handleValidate()}
-                />
-                <Button 
-                  onClick={handleValidate}
-                  disabled={!code.trim() || isLoading}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+              {/* Mode Toggle */}
+              <div className="flex gap-2">
+                <Button
+                  variant={inputMode === 'manual' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setInputMode('manual')}
+                  className="flex-1"
                 >
-                  {isLoading ? (
-                    <span className="flex items-center gap-2">
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      Validando
-                    </span>
-                  ) : (
-                    <>
-                      <Search className="mr-2 h-4 w-4" />
-                      Validar
-                    </>
-                  )}
+                  <Keyboard className="mr-2 h-4 w-4" />
+                  MANUAL
+                </Button>
+                <Button
+                  variant={inputMode === 'scanner' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    setInputMode('scanner')
+                    if (!scanning) startScanner()
+                  }}
+                  className="flex-1"
+                >
+                  <Camera className="mr-2 h-4 w-4" />
+                  ESCANEAR QR
                 </Button>
               </div>
+
+              {/* Scanner */}
+              {inputMode === 'scanner' && (
+                <div className="rounded-lg border border-border bg-card p-4">
+                  {scanning ? (
+                    <div className="flex flex-col items-center gap-4">
+                      <div id="qr-reader" className="w-full" />
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          scannerRef.current?.clear()
+                          stopScanner()
+                          setInputMode('manual')
+                        }}
+                      >
+                        <CameraOff className="mr-2 h-4 w-4" />
+                        Cerrar Cámara
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-4 py-4">
+                      <Camera className="h-12 w-12 text-muted-foreground" />
+                      <p className="text-center text-muted-foreground">
+                        Haz clic en "ESCANEAR QR" para activates la cámara
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Manual Input */}
+              {inputMode === 'manual' && (
+                <div className="flex gap-3">
+                  <Input
+                    placeholder="Ej: A1B2C3D4"
+                    value={code}
+                    onChange={(e) => {
+                      setCode(e.target.value.toUpperCase())
+                      setStatus('idle')
+                    }}
+                    className="flex-1 border-border bg-input font-mono text-foreground uppercase placeholder:text-muted-foreground"
+                    onKeyDown={(e) => e.key === 'Enter' && handleValidate()}
+                  />
+                  <Button 
+                    onClick={handleValidate}
+                    disabled={!code.trim() || isLoading}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    {isLoading ? (
+                      <span className="flex items-center gap-2">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        Validando
+                      </span>
+                    ) : (
+                      <>
+                        <Search className="mr-2 h-4 w-4" />
+                        Validar
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
 
               {/* Status Result */}
               {status !== 'idle' && getStatusContent()}

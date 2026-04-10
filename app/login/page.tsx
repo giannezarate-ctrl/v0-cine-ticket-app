@@ -11,10 +11,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/use-toast'
 
+interface UserData {
+  id: number
+  name: string
+  email: string
+  role: string
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [currentUser, setCurrentUser] = useState<UserData | null>(null)
   
   // Login form
   const [loginEmail, setLoginEmail] = useState('')
@@ -126,12 +134,20 @@ export default function LoginPage() {
       }
 
       toast({
-        title: 'Cuenta creada',
-        description: 'Bienvenido a CinePlex. Ya puedes iniciar sesión.',
+        title: 'Cuenta creada exitosamente',
+        description: data.user?.name 
+          ? `Bienvenido ${data.user.name}. Ya puedes comprar tus entradas.`
+          : 'Bienvenido. Ya puedes comprar tus entradas.',
       })
 
-      // Redirect to login page
-      router.push('/login')
+      // Save user to localStorage and state
+      if (data.user) {
+        localStorage.setItem('cineplex_user', JSON.stringify(data.user))
+        setCurrentUser(data.user)
+      }
+
+      // Redirect to home
+      router.push('/')
       
       // Clear register form
       setRegisterName('')

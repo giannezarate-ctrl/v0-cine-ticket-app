@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import type { Movie, Showtime } from '@/lib/db'
 import { CheckCircle2, Download, Copy, Film, Printer } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import QRCode from 'qrcode'
 
 interface TicketModalProps {
   open: boolean
@@ -35,6 +36,28 @@ export function TicketModal({
   customerName,
 }: TicketModalProps) {
   const [copied, setCopied] = useState(false)
+  const [qrCodes, setQrCodes] = useState<string[]>([])
+
+  useEffect(() => {
+    async function generateQR() {
+      if (!ticketCodes.length) return
+      const codes = await Promise.all(
+        ticketCodes.map(async (code) => {
+          const qrDataUrl = await QRCode.toDataURL(code, {
+            width: 200,
+            margin: 2,
+            color: {
+              dark: '#000000',
+              light: '#ffffff'
+            }
+          })
+          return qrDataUrl
+        })
+      )
+      setQrCodes(codes)
+    }
+    generateQR()
+  }, [ticketCodes])
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -204,6 +227,24 @@ Presente este ticket en la entrada.
                 ))}
               </div>
             </div>
+
+            <Separator className="my-4 border-dashed" />
+
+            {/* QR Codes */}
+            {qrCodes.length > 0 && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground">
+                  Escanea para entrar
+                </p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {qrCodes.map((qr, index) => (
+                    <div key={index} className=" rounded-lg bg-white p-2">
+                      <img src={qr} alt="QR Code" className="h-32 w-32" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <Separator className="my-4 border-dashed" />
 
