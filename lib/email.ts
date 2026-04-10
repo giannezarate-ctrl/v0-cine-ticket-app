@@ -113,8 +113,8 @@ async function generateTicketPDF(
       doc.fontSize(18).fillColor('#e50914').text(`TOTAL PAGADO: $${totalAmount.toLocaleString('es-CO')}`, { align: 'left' })
       doc.moveDown(2)
 
-      const qrBuffer = await QRCode.toBuffer(ticketCode, { width: 200, margin: 2 })
-      doc.image(qrBuffer, { fit: [150, 150], align: 'center' })
+      const qrDataUrl = await QRCode.toDataURL(ticketCode, { width: 200, margin: 2 })
+      doc.image(qrDataUrl, { fit: [150, 150], align: 'center' })
       doc.moveDown(1)
       doc.fontSize(10).fillColor('#666').text('Escanea este codigo QR en la entrada', { align: 'center' })
       doc.moveDown(2)
