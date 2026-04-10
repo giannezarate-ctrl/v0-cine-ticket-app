@@ -77,8 +77,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Showtime not found' }, { status: 404 })
     }
 
-    // Block purchase if showtime already passed
-    if (new Date(start_time) < new Date()) {
+    // Block purchase if showtime already passed (allow 24 hours buffer for timezone diffs)
+    const showDateTime = new Date(start_time);
+    const now = new Date();
+    if (showDateTime.getTime() + 24 * 60 * 60 * 1000 < now.getTime()) {
       return NextResponse.json({ error: 'Esta funcion ya paso' }, { status: 400 })
     }
 

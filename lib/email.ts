@@ -1,7 +1,7 @@
 const BREVO_API_URL = 'https://api.brevo.com/v3'
-const BREVO_API_KEY = process.env.BREVO_API_KEY
-const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'noreply@tucinema.com'
-const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || 'Tu Cine'
+const BREVO_API_KEY = process.env.BREVO_API_KEY || process.env.BREVO_APIKEY
+const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || process.env.BREVO_SENDER_NAME || 'noreply@tucinema.com'
+const BREVO_SENDER_NAME = process.env.BREVO_NAME || process.env.BREVO_SENDER_NAME || 'Tu Cine'
 
 interface SendEmailParams {
   to: { email: string; name?: string }[]
