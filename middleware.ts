@@ -5,11 +5,13 @@ import type { NextRequest } from 'next/server'
 const protectedPaths = [
   '/mis-tickets',
   '/admin',
+  '/validar',
 ]
 
 // Rutas de admin que requieren rol específico
 const adminPaths = [
   '/admin',
+  '/validar',
 ]
 
 export function middleware(request: NextRequest) {
@@ -89,11 +91,13 @@ export const config = {
    * Aplicar middleware solo a rutas específicas que lo necesitan:
    * - /mis-tickets (页 protegida)
    * - /admin (panel de admin)
+   * - /validar (validación de tickets - solo admin)
    * 
    * NO aplicar a rutas API ya que cada ruta maneja su propia autenticación
    */
   matcher: [
     '/mis-tickets/:path*',
     '/admin/:path*',
+    '/validar/:path*',
   ],
 }

@@ -71,6 +71,9 @@ export function Header() {
   const navLinks = [
     { href: '/', label: 'Cartelera' },
     { href: '/funciones', label: 'Funciones' },
+  ]
+
+  const adminLinks = [
     { href: '/validar', label: 'Validar Tiquete', icon: Ticket },
   ]
 
@@ -88,6 +91,21 @@ export function Header() {
 
         <nav className="hidden items-center gap-1 md:flex">
           {navLinks.map((link) => {
+            const Icon = link.icon
+            const isActive = pathname === link.href
+            return (
+              <Link key={link.href} href={link.href} prefetch={true}>
+                <Button 
+                  variant="ghost" 
+                  className={`${isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground'} hover:text-foreground`}
+                >
+                  {Icon && <Icon className="mr-2 h-4 w-4" />}
+                  {link.label}
+                </Button>
+              </Link>
+            )
+          })}
+          {user?.role === 'admin' && adminLinks.map((link) => {
             const Icon = link.icon
             const isActive = pathname === link.href
             return (
@@ -182,12 +200,6 @@ export function Header() {
                 Funciones
               </Button>
             </Link>
-            <Link href="/validar" onClick={() => setIsMenuOpen(false)}>
-              <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-foreground">
-                <Ticket className="mr-2 h-4 w-4" />
-                Validar Tiquete
-              </Button>
-            </Link>
             
             {loading ? (
               <Button variant="ghost" className="w-full" disabled>
@@ -206,12 +218,20 @@ export function Header() {
                   </div>
                 </div>
                 {user.role === 'admin' && (
-                  <Link href="/admin" onClick={() => setIsMenuOpen(false)}>
-                    <Button variant="ghost" className="w-full justify-start">
-                      <LayoutDashboard className="mr-2 h-4 w-4" />
-                      Panel Admin
-                    </Button>
-                  </Link>
+                  <>
+                    <Link href="/admin" onClick={() => setIsMenuOpen(false)}>
+                      <Button variant="ghost" className="w-full justify-start">
+                        <LayoutDashboard className="mr-2 h-4 w-4" />
+                        Panel Admin
+                      </Button>
+                    </Link>
+                    <Link href="/validar" onClick={() => setIsMenuOpen(false)}>
+                      <Button variant="ghost" className="w-full justify-start">
+                        <Ticket className="mr-2 h-4 w-4" />
+                        Validar Tiquete
+                      </Button>
+                    </Link>
+                  </>
                 )}
                 <Link href="/mis-tickets" onClick={() => setIsMenuOpen(false)}>
                   <Button variant="ghost" className="w-full justify-start">
