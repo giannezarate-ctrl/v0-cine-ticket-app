@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useToast } from '@/components/ui/use-toast'
 import { ShoppingCart, Ticket, Check, Monitor, Loader2 } from 'lucide-react'
 import { TicketModal } from './ticket-modal'
 import type { Movie, Showtime } from '@/lib/db'
@@ -23,7 +24,8 @@ interface OccupiedSeat {
 }
 
 export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
-  const [selectedSeats, setSelectedSeats] = useState<string[]>([])
+  const router = useRouter()
+  const { toast } = useToast()
   const [occupiedSeats, setOccupiedSeats] = useState<OccupiedSeat[]>([])
   const [showTicket, setShowTicket] = useState(false)
   const [ticketCodes, setTicketCodes] = useState<string[]>([])
@@ -32,8 +34,6 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
   const [loading, setLoading] = useState(false)
   const [purchasing, setPurchasing] = useState(false)
   const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string } | null>(null)
-
-  const router = useRouter()
 
   const rowsCount = showtime.rows_count || 10
   const seatsPerRow = showtime.seats_per_row || 6
@@ -124,7 +124,11 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
     }
 
     if (selectedSeats.length === 0) {
-      alert('Por favor selecciona al menos un asiento')
+      toast({
+        variant: 'destructive',
+        title: 'Sin asientos',
+        description: 'Por favor selecciona al menos un asiento',
+      })
       return
     }
 
@@ -152,14 +156,25 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
         const ticket = await res.json()
         setTicketCodes([ticket.code])
         setShowTicket(true)
+        toast({
+          title: '¡Compra exitosa!',
+          description: 'Tu entrada ha sido generada. Revisa tu correo.',
+        })
       } else {
-
         const error = await res.json()
-        alert(error.error || 'Error al procesar la compra')
+        toast({
+          variant: 'destructive',
+          title: 'Error en la compra',
+          description: error.error || 'No se pudo procesar la compra',
+        })
       }
     } catch (error) {
       console.error('Error purchasing tickets:', error)
-      alert('Error al procesar la compra')
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Ocurrió un error al procesar la compra',
+      })
     } finally {
       setPurchasing(false)
     }

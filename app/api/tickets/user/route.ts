@@ -38,7 +38,13 @@ export async function GET() {
       ORDER BY t.created_at DESC
     `
 
-    return NextResponse.json(tickets)
+    // Format show_date from start_time
+    const formattedTickets = tickets.map((t: any) => ({
+      ...t,
+      show_date: t.show_time ? new Date(t.show_time).toISOString().split('T')[0] : null
+    }))
+
+    return NextResponse.json(formattedTickets)
   } catch (error) {
     console.error('Error fetching user tickets:', error)
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })

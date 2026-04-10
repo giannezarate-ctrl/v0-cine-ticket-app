@@ -151,9 +151,17 @@ export default function MisTicketsPage() {
           {tickets.map((ticket) => (
             <Card key={ticket.id} className="overflow-hidden">
               <div className="flex flex-col md:flex-row">
-                {/* Poster placeholder */}
-                <div className="md:w-32 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center p-4">
-                  <Film className="h-12 w-12 text-primary/50" />
+                {/* Movie Poster */}
+                <div className="md:w-32 h-40 md:h-auto bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center p-4">
+                  {ticket.movie_poster ? (
+                    <img 
+                      src={ticket.movie_poster} 
+                      alt={ticket.movie_title || 'Película'}
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  ) : (
+                    <Film className="h-12 w-12 text-primary/50" />
+                  )}
                 </div>
                 
                 {/* Ticket info */}

@@ -8,6 +8,38 @@ export async function DELETE(
   try {
     const { id } = await params
     
+    // Check if showtime has started (has active tickets)
+    const showtimeCheck = await sql`
+      SELECT s.start_time, COUNT(t.id) as ticket_count
+      FROM showtimes s
+      LEFT JOIN tickets t ON t.showtime_id = s.id AND t.status = 'active'
+      WHERE s.id = ${id}
+      GROUP BY s.id, s.start_time
+    `
+    
+    if (showtimeCheck.length === 0) {
+      return NextResponse.json({ error: 'Función no encontrada' }, { status: 404 })
+    }
+    
+    const { start_time, ticket_count } = showtimeCheck[0]
+    const showtimeDate = new Date(start_time)
+    const now = new Date()
+    
+    // Don't allow deleting showtimes that have started within the last 4 hours
+    const hoursSinceStart = (now.getTime() - showtimeDate.getTime()) / (1000 * 60 * 60)
+    
+    if (hoursSinceStart > -1 && hoursSinceStart < 4) {
+      return NextResponse.json({ 
+        error: '400_SHOWTIME_ACTIVE: No puedes eliminar una función que está en curso o próxima a comenzar. Espera al menos 4 horas después de la hora de inicio.' 
+      }, { status: 400 })
+    }
+    
+    if (Number(ticket_count) > 0 && hoursSinceStart < 0) {
+      return NextResponse.json({ 
+        error: '400_HAS_TICKETS: Esta función tiene tickets activos. Espera a que terminen las funciones o cancela los tickets primero.' 
+      }, { status: 400 })
+    }
+    
     // Explicit manual deletes to avoid FK constraint errors if ON DELETE CASCADE isn't set up
     await sql`DELETE FROM ticket_seats WHERE ticket_id IN (SELECT id FROM tickets WHERE showtime_id = ${id})`
     await sql`DELETE FROM tickets WHERE showtime_id = ${id}`

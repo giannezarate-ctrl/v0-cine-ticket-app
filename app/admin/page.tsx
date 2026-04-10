@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { useToast } from '@/components/ui/use-toast'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   Dialog,
@@ -63,6 +64,7 @@ interface Stats {
 
 export default function AdminPage() {
   const router = useRouter()
+  const { toast } = useToast()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const isAuthChecked = useRef(false)
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -242,14 +244,29 @@ export default function AdminPage() {
       })
       
       if (res.ok) {
+        toast({
+          title: 'Película creada',
+          description: `${newMovie.title} ha sido agregada exitosamente.`,
+        })
         setMovieDialogOpen(false)
         setNewMovie({ title: '', genre: '', duration: '', rating: '', synopsis: '', poster_url: '', release_date: '' })
         setNewMovieImage(null)
         setNewMovieImagePreview('')
         fetchData()
+      } else {
+        const data = await res.json()
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: data.error || 'No se pudo crear la película',
+        })
       }
     } catch (error) {
-      console.error('Error adding movie:', error)
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Ocurrió un error al crear la película',
+      })
     } finally {
       setSaving(false)
     }
@@ -270,25 +287,29 @@ export default function AdminPage() {
       })
       
       if (res.ok) {
+        toast({
+          title: 'Función creada',
+          description: 'La función ha sido programada exitosamente.',
+        })
         setShowtimeDialogOpen(false)
         setNewShowtime({ movie_id: '', room_id: '', show_date: '', show_time: '', price: '' })
         fetchData()
+      } else {
+        const data = await res.json()
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: data.error || 'No se pudo crear la función',
+        })
       }
     } catch (error) {
-      console.error('Error adding showtime:', error)
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Ocurrió un error al crear la función',
+      })
     } finally {
       setSaving(false)
-    }
-  }
-
-  const handleDeleteMovie = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar esta película?')) return
-    
-    try {
-      const res = await fetch(`/api/movies/${id}`, { method: 'DELETE' })
-      if (res.ok) fetchData()
-    } catch (error) {
-      console.error('Error deleting movie:', error)
     }
   }
 
@@ -325,16 +346,59 @@ export default function AdminPage() {
       })
       
       if (res.ok) {
+        toast({
+          title: 'Película actualizada',
+          description: `${editMovie.title} ha sido actualizada exitosamente.`,
+        })
         setEditMovieDialogOpen(false)
         setEditMovie(null)
         setEditMovieImage(null)
         setEditMovieImagePreview('')
         fetchData()
+      } else {
+        const data = await res.json()
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: data.error || 'No se pudo actualizar la película',
+        })
       }
     } catch (error) {
-      console.error('Error updating movie:', error)
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Ocurrió un error al actualizar la película',
+      })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDeleteMovie = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar esta película?')) return
+    
+    try {
+      const res = await fetch(`/api/movies/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast({
+          title: 'Película eliminada',
+          description: 'La película ha sido eliminada exitosamente.',
+        })
+        fetchData()
+      } else {
+        const data = await res.json()
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: data.error || 'No se pudo eliminar la película',
+        })
+      }
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Ocurrió un error al eliminar la película',
+      })
     }
   }
 
@@ -343,10 +407,26 @@ export default function AdminPage() {
     
     try {
       const res = await fetch(`/api/showtimes/${id}`, { method: 'DELETE' })
-      if (res.ok) fetchData()
-      else alert('Error al eliminar la función')
+      if (res.ok) {
+        toast({
+          title: 'Función eliminada',
+          description: 'La función ha sido eliminada exitosamente.',
+        })
+        fetchData()
+      } else {
+        const data = await res.json()
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: data.error || 'No se pudo eliminar la función',
+        })
+      }
     } catch (error) {
-      console.error('Error deleting showtime:', error)
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Ocurrió un error al eliminar la función',
+      })
     }
   }
 
@@ -370,16 +450,27 @@ export default function AdminPage() {
       })
       
       if (res.ok) {
+        toast({
+          title: 'Función actualizada',
+          description: 'La función ha sido actualizada exitosamente.',
+        })
         setEditShowtimeDialogOpen(false)
         setEditShowtime(null)
         fetchData()
       } else {
-        const error = await res.json()
-        alert(error.error || 'Error al actualizar la función')
+        const data = await res.json()
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: data.error || 'No se pudo actualizar la función',
+        })
       }
     } catch (error) {
-      console.error('Error updating showtime:', error)
-      alert('Error al actualizar la función')
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Ocurrió un error al actualizar la función',
+      })
     } finally {
       setSaving(false)
     }
