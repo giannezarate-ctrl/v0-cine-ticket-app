@@ -27,6 +27,7 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
   const router = useRouter()
   const { toast } = useToast()
   const [occupiedSeats, setOccupiedSeats] = useState<OccupiedSeat[]>([])
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([])
   const [showTicket, setShowTicket] = useState(false)
   const [ticketCodes, setTicketCodes] = useState<string[]>([])
   const [customerName, setCustomerName] = useState('')
