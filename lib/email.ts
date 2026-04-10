@@ -13,6 +13,27 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 })
 
+async function uploadToCloudinary(buffer: Buffer, filename: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'cine-attachments',
+        resource_type: 'auto',
+      },
+      (error, result) => {
+        if (error) {
+          console.error('[EMAIL] Cloudinary upload error:', error)
+          resolve(null)
+        } else {
+          console.log('[EMAIL] Cloudinary upload success:', result?.secure_url)
+          resolve(result?.secure_url || null)
+        }
+      }
+    )
+    uploadStream.end(buffer)
+  })
+}
+
 async function generateQRCodeImage(ticketCode: string): Promise<string | null> {
   try {
     const qrBuffer = await QRCode.toBuffer(ticketCode, {
@@ -176,10 +197,23 @@ export async function sendEmail({ to, subject, htmlContent, textContent, attachm
     }
 
     if (attachments && attachments.length > 0) {
-      emailPayload.attachment = attachments.map(att => ({
-        url: `data:${att.contentType};base64,${att.content.toString('base64')}`,
-        name: att.filename,
-      }))
+      console.log('[EMAIL] Processing attachments:', attachments.length)
+      const processedAttachments = await Promise.all(
+        attachments.map(async (att) => {
+          console.log('[EMAIL] Uploading:', att.filename)
+          const uploaded = await uploadToCloudinary(att.content, att.filename)
+          if (uploaded) {
+            return { url: uploaded, name: att.filename }
+          }
+          console.log('[EMAIL] Failed to upload:', att.filename)
+          return null
+        })
+      )
+      const validAttachments = processedAttachments.filter((a): a is { url: string; name: string } => a !== null)
+      console.log('[EMAIL] Valid attachments:', validAttachments.length)
+      if (validAttachments.length > 0) {
+        emailPayload.attachment = validAttachments
+      }
     }
 
     const response = await fetch(`${BREVO_API_URL}/smtp/email`, {
@@ -226,21 +260,10 @@ export async function sendTicketEmail(
     day: 'numeric',
   })
 
-  let pdfBuffer: Buffer | null = null
-  let qrPngBuffer: Buffer | null = null
-  if (ticketCode) {
-    try {
-      pdfBuffer = await generateTicketPDF(customerName, movieTitle, showDate, showTime, seats, totalAmount, ticketCode, roomName)
-      console.log('[EMAIL] PDF generated, size:', pdfBuffer.length)
-      
-      const qrDataUrl = await QRCode.toDataURL(ticketCode, { width: 300, margin: 2 })
-      const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '')
-      qrPngBuffer = Buffer.from(base64Data, 'base64')
-      console.log('[EMAIL] QR PNG generated, size:', qrPngBuffer.length)
-    } catch (err) {
-      console.error('[EMAIL] Error generating attachments:', err)
-    }
-  }
+  
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const qrDownloadUrl = ticketCode ? `${appUrl}/api/tickets/qr?code=${ticketCode}` : ''
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -297,10 +320,21 @@ export async function sendTicketEmail(
         </div>
       </div>
       
+      ${qrDownloadUrl ? `
+      <div style="text-align: center; margin: 25px 0; padding: 20px; background: #f8f8f8; border-radius: 10px;">
+        <p style="margin: 0 0 15px 0; font-size: 16px; color: #333;"><strong>Descarga tu codigo QR</strong></p>
+        <a href="${qrDownloadUrl}" style="display: inline-block; background: #e50914; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-size: 14px;">
+          Descargar QR
+        </a>
+        <p style="margin: 15px 0 0 0; font-size: 12px; color: #666;">
+          Haz clic en el boton para descargar la imagen del codigo QR
+        </p>
+      </div>
+      ` : ''}
+      
       <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
         <p style="margin: 0; font-size: 14px;"><strong>⚠️ Importante:</strong></p>
         <ul style="margin: 10px 0 0 20px; padding: 0; font-size: 14px;">
-          <li>Se han adjuntado archivos con tu entrada y codigo QR</li>
           <li>Presenta el codigo QR en la entrada del cine</li>
           <li>Llega 15 minutos antes de la funcion</li>
         </ul>
@@ -313,38 +347,11 @@ export async function sendTicketEmail(
     </div>
   `
 
-  const emailOptions = {
+  return sendEmail({
     to: [{ email: customerEmail, name: customerName }],
     subject: `🎬 Entrada: ${movieTitle} - ${formattedDate}`,
     htmlContent,
-  }
-
-  const atts: Array<{ content: Buffer; filename: string; contentType: string }> = []
-  
-  if (qrPngBuffer && ticketCode) {
-    atts.push({
-      content: qrPngBuffer,
-      filename: `qr-${ticketCode}.png`,
-      contentType: 'image/png',
-    })
-  }
-  
-  if (pdfBuffer) {
-    atts.push({
-      content: pdfBuffer,
-      filename: `entrada-${ticketCode}.pdf`,
-      contentType: 'application/pdf',
-    })
-  }
-
-  if (atts.length > 0) {
-    return sendEmail({
-      ...emailOptions,
-      attachments: atts,
-    } as SendEmailParams)
-  }
-
-  return sendEmail(emailOptions as SendEmailParams)
+  })
 }
 
 export async function sendWelcomeEmail(email: string, name: string) {
