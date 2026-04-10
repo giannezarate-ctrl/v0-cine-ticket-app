@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Ticket, CheckCircle2, XCircle, AlertCircle, Search, QrCode, Camera, CameraOff, Keyboard } from 'lucide-react'
+import { Ticket, CheckCircle2, XCircle, AlertCircle, Search, QrCode, Camera, CameraOff, Keyboard, Scan } from 'lucide-react'
 import { Html5QrcodeScanner } from 'html5-qrcode'
 
 interface TicketInfo {
@@ -25,7 +25,7 @@ interface TicketInfo {
 }
 
 type ValidationStatus = 'idle' | 'valid' | 'used' | 'invalid'
-type InputMode = 'manual' | 'scanner'
+type InputMode = 'manual' | 'scanner' | 'scanner_usb'
 
 export default function ValidarPage() {
   const [code, setCode] = useState('')
@@ -65,6 +65,17 @@ export default function ValidarPage() {
   useEffect(() => {
     if (!scanning || inputMode !== 'scanner') return
 
+    const onScanSuccess = (decodedText: string) => {
+      console.log('[SCANNER] Scanned:', decodedText)
+      setCode(decodedText.toUpperCase())
+      setScanning(false)
+      handleValidate()
+    }
+
+    const onScanFailure = (error: string) => {
+      console.log('[SCANNER] Error:', error)
+    }
+
     const scanner = new Html5QrcodeScanner(
       'qr-reader',
       { fps: 10, qrbox: { width: 250, height: 250 } },
@@ -73,24 +84,61 @@ export default function ValidarPage() {
 
     scannerRef2.current = scanner
 
-    scanner.render(
-      (decodedText) => {
-        scanner.clear()
-        setCode(decodedText)
-        setScanning(false)
-        handleValidate()
-      },
-      () => {}
-    )
+    scanner.render(onScanSuccess, onScanFailure)
 
     return () => {
       scanner.clear().catch(() => {})
     }
   }, [scanning, inputMode])
 
+  // Listen for USB scanner input (keyboard wedge mode)
+  useEffect(() => {
+    if (inputMode !== 'scanner_usb') return
+
+    let buffer = ''
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        if (buffer.trim()) {
+          // Limpiar el código - quitar prefijo TKT- y caracteres Shift
+          let scannedCode = buffer.trim()
+          // Remover todos los "Shift" del buffer (caracteres de modificador)
+          scannedCode = scannedCode.replace(/Shift/g, '')
+          scannedCode = scannedCode.replace(/Control/g, '')
+          scannedCode = scannedCode.replace(/Alt/g, '')
+          scannedCode = scannedCode.replace(/Meta/g, '')
+          scannedCode = scannedCode.toUpperCase()
+          
+          // Quitar prefijo TKT- si existe
+          if (scannedCode.startsWith('TKT-')) {
+            scannedCode = scannedCode.substring(4)
+          }
+          
+          console.log('[USB] Scanned:', scannedCode, '| Original:', buffer)
+          setCode(scannedCode)
+          buffer = ''
+          handleValidate()
+        }
+      } else {
+        // Ignorar teclas de修饰
+        if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) {
+          buffer += e.key
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      buffer = ''
+    }
+  }, [inputMode])
+
   const handleValidate = async () => {
     if (!code.trim()) return
 
+    console.log('[VALIDATE] Sending code:', code)
     setIsLoading(true)
     setErrorMessage('')
     
@@ -267,7 +315,16 @@ export default function ValidarPage() {
                   className="flex-1"
                 >
                   <Camera className="mr-2 h-4 w-4" />
-                  ESCANEAR QR
+                  CÁMARA
+                </Button>
+                <Button
+                  variant={inputMode === 'scanner_usb' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setInputMode('scanner_usb')}
+                  className="flex-1"
+                >
+                  <Scan className="mr-2 h-4 w-4" />
+                  PISTOLA
                 </Button>
               </div>
 
@@ -301,22 +358,36 @@ export default function ValidarPage() {
               )}
 
               {/* Manual Input */}
-              {inputMode === 'manual' && (
-                <div className="flex gap-3">
-                  <Input
-                    placeholder="Ej: A1B2C3D4"
-                    value={code}
-                    onChange={(e) => {
-                      setCode(e.target.value.toUpperCase())
-                      setStatus('idle')
-                    }}
-                    className="flex-1 border-border bg-input font-mono text-foreground uppercase placeholder:text-muted-foreground"
-                    onKeyDown={(e) => e.key === 'Enter' && handleValidate()}
-                  />
+              {(inputMode === 'manual' || inputMode === 'scanner_usb') && (
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-border bg-muted/30 p-4">
+                    {inputMode === 'scanner_usb' ? (
+                      <div className="flex items-center gap-3">
+                        <Scan className="h-8 w-8 text-primary" />
+                        <div>
+                          <p className="font-medium text-foreground">lector de Código de Barras</p>
+                          <p className="text-sm text-muted-foreground">
+                            Escanea el código con la pistola. Se validará automáticamente al presionar Enter.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <Input
+                        placeholder="Ej: A1B2C3D4"
+                        value={code}
+                        onChange={(e) => {
+                          setCode(e.target.value.toUpperCase())
+                          setStatus('idle')
+                        }}
+                        className="flex-1 border-border bg-input font-mono text-foreground uppercase placeholder:text-muted-foreground"
+                        onKeyDown={(e) => e.key === 'Enter' && handleValidate()}
+                      />
+                    )}
+                  </div>
                   <Button 
                     onClick={handleValidate}
                     disabled={!code.trim() || isLoading}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                   >
                     {isLoading ? (
                       <span className="flex items-center gap-2">

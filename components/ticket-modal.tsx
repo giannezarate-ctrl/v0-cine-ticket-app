@@ -41,20 +41,26 @@ export function TicketModal({
   useEffect(() => {
     async function generateQR() {
       if (!ticketCodes.length) return
-      const codes = await Promise.all(
-        ticketCodes.map(async (code) => {
-          const qrDataUrl = await QRCode.toDataURL(code, {
-            width: 200,
-            margin: 2,
-            color: {
-              dark: '#000000',
-              light: '#ffffff'
-            }
+      console.log('[QR] Generating for codes:', ticketCodes)
+      try {
+        const codes = await Promise.all(
+          ticketCodes.map(async (code) => {
+            const qrDataUrl = await QRCode.toDataURL(code, {
+              width: 200,
+              margin: 2,
+              color: {
+                dark: '#000000',
+                light: '#ffffff'
+              }
+            })
+            return qrDataUrl
           })
-          return qrDataUrl
-        })
-      )
-      setQrCodes(codes)
+        )
+        setQrCodes(codes)
+        console.log('[QR] Generated', codes.length, 'QR codes')
+      } catch (err) {
+        console.error('[QR] Error generating:', err)
+      }
     }
     generateQR()
   }, [ticketCodes])

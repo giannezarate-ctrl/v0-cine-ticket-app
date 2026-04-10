@@ -21,6 +21,7 @@ interface TicketData {
   validado: boolean
   created_at: string
   movie_title?: string
+  movie_poster?: string
   show_date?: string
   show_time?: string
   room_name?: string

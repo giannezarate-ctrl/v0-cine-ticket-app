@@ -6,10 +6,17 @@ export async function POST(request: Request) {
     const body = await request.json()
     let { ticket_code } = body
     
+    console.log('[VALIDATE] Input code:', ticket_code)
+    
     ticket_code = ticket_code.trim().toUpperCase()
     if (ticket_code.startsWith('TKT-')) {
       ticket_code = ticket_code.substring(4)
     }
+    
+    console.log('[VALIDATE] Cleaned code:', ticket_code)
+    
+    // Try searching with TKT- prefix
+    let searchCode = 'TKT-' + ticket_code
     
     const tickets = await sql`
       SELECT 
@@ -25,8 +32,17 @@ export async function POST(request: Request) {
       JOIN movies m ON s.movie_id = m.id
       JOIN rooms r ON s.room_id = r.id
       LEFT JOIN users u ON t.user_id = u.id
-      WHERE t.code = ${'TKT-' + ticket_code}
+      WHERE t.code = ${searchCode}
     `
+    
+    // If not found, show what codes exist in DB
+    if (tickets.length === 0) {
+      const allTickets = await sql`SELECT code FROM tickets LIMIT 10`
+      console.log('[VALIDATE] Codes in DB:', allTickets.map((t: any) => t.code))
+    }
+    
+    console.log('[VALIDATE] Searching with code:', searchCode)
+    console.log('[VALIDATE] Tickets found:', tickets.length)
     
     if (tickets.length === 0) {
       return NextResponse.json(
