@@ -1,3 +1,5 @@
+import QRCode from 'qrcode'
+
 const BREVO_API_URL = 'https://api.brevo.com/v3'
 const BREVO_API_KEY = process.env.BREVO_API_KEY || process.env.BREVO_APIKEY
 const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || process.env.BREVO_SENDER_NAME || 'noreply@tucinema.com'
@@ -80,6 +82,22 @@ export async function sendTicketEmail(
     day: 'numeric',
   })
 
+  let qrCodeDataUrl = ''
+  if (ticketCode) {
+    try {
+      qrCodeDataUrl = await QRCode.toDataURL(ticketCode, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF',
+        },
+      })
+    } catch (err) {
+      console.error('Error generating QR code:', err)
+    }
+  }
+
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <div style="text-align: center; border-bottom: 2px solid #e50914; padding-bottom: 20px; margin-bottom: 20px;">
@@ -135,10 +153,17 @@ export async function sendTicketEmail(
         </div>
       </div>
       
+      ${qrCodeDataUrl ? `
+      <div style="text-align: center; margin: 25px 0; padding: 20px; background: white; border-radius: 10px; border: 2px solid #e50914;">
+        <p style="margin: 0 0 15px 0; font-size: 14px; color: #666;"><strong>Escanea este codigo QR en la entrada</strong></p>
+        <img src="${qrCodeDataUrl}" alt="Codigo QR" style="width: 180px; height: 180px;" />
+      </div>
+      ` : ''}
+      
       <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
         <p style="margin: 0; font-size: 14px;"><strong>⚠️ Importante:</strong></p>
         <ul style="margin: 10px 0 0 20px; padding: 0; font-size: 14px;">
-          <li>Presenta este correo o el codigo de entrada en la entrada del cine</li>
+          <li>Presenta este correo o el codigo QR en la entrada del cine</li>
           <li>Llega 15 minutos antes de la funcion</li>
           <li>No se permiten entradas tarde</li>
         </ul>
