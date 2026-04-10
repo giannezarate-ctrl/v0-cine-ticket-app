@@ -3,11 +3,6 @@ import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
   try {
-    // Clean up past showtimes (delete ones that ended 24 hours ago to avoid timezone glitches)
-    await sql`
-      DELETE FROM showtimes 
-      WHERE start_time < NOW() - INTERVAL '24 hours'
-    `
 
     const { searchParams } = new URL(request.url)
     const movieId = searchParams.get('movieId')
@@ -15,20 +10,30 @@ export async function GET(request: Request) {
 
     if (movieId) {
       showtimes = await sql`
-        SELECT s.*, m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity
+        SELECT s.*, m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity,
+        COALESCE((
+          SELECT COUNT(*) 
+          FROM showtime_seats ss 
+          WHERE ss.showtime_id = s.id AND ss.status = 'available'
+        ), 0) as available_seats
         FROM showtimes s
         JOIN movies m ON s.movie_id = m.id
         JOIN rooms r ON s.room_id = r.id
-        WHERE s.movie_id = ${movieId} AND s.start_time > NOW() - INTERVAL '24 hours'
+        WHERE s.movie_id = ${movieId} AND s.start_time > NOW()
         ORDER BY s.start_time
       `
     } else {
       showtimes = await sql`
-        SELECT s.*, m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity
+        SELECT s.*, m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity,
+        COALESCE((
+          SELECT COUNT(*) 
+          FROM showtime_seats ss 
+          WHERE ss.showtime_id = s.id AND ss.status = 'available'
+        ), 0) as available_seats
         FROM showtimes s
         JOIN movies m ON s.movie_id = m.id
         JOIN rooms r ON s.room_id = r.id
-        WHERE s.start_time > NOW() - INTERVAL '24 hours'
+        WHERE s.start_time > NOW()
         ORDER BY s.start_time
       `
     }
@@ -43,7 +48,7 @@ export async function GET(request: Request) {
         rows_count: 10,
         seats_per_row: Math.ceil((s.capacity || 0) / 10)
       }
-    })
+    }).filter((s: any) => s.available_seats > 0)
 
     console.log('SHOWTIMES:', mapped)
 

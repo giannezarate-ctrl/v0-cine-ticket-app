@@ -191,6 +191,87 @@ export async function POST(request: Request) {
         synopsis: 'Miles Morales regresa para una épica aventura que transportará al amigable vecino de Brooklyn a través del Multiverso.',
         poster_url: 'https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg',
         release_date: '2023-06-02'
+      },
+      { 
+        title: 'Barbie', 
+        genre: 'Comedia', 
+        duration: 114, 
+        rating: 'PG-13', 
+        synopsis: 'Barbiedoll vive en Barbieland, pero cuando decide salir del mundo perfecto, descubre lo que hay más allá.',
+        poster_url: 'https://image.tmdb.org/t/p/w500/iuFNMS8U5cb6xfziGlbLJXrFSo.jpg',
+        release_date: '2023-07-21'
+      },
+      { 
+        title: 'The Batman', 
+        genre: 'Acción', 
+        duration: 176, 
+        rating: 'PG-13', 
+        synopsis: 'Batman persigue a una serie de asesinos en serie en Gotham City durante dos años.',
+        poster_url: 'https://image.tmdb.org/t/p/w500/74hLDKjD5aGYOotO6esUVaeISa2.jpg',
+        release_date: '2022-03-04'
+      },
+      { 
+        title: 'Top Gun: Maverick', 
+        genre: 'Acción', 
+        duration: 131, 
+        rating: 'PG-13', 
+        synopsis: 'After thirty years, Maverick is still pushing the envelope as a top naval aviator.',
+        poster_url: 'https://image.tmdb.org/t/p/w500/62HCnUTziyWcpDaBO2i1DG35MPB.jpg',
+        release_date: '2022-05-27'
+      },
+      { 
+        title: 'Avatar: El Camino del Agua', 
+        genre: 'Ciencia Ficción', 
+        duration: 192, 
+        rating: 'PG-13', 
+        synopsis: 'Jake Sully vive con su familia expandida en Pandora. Cuando una amenaza conocida vuelve, deben unirse para proteger su hogar.',
+        poster_url: 'https://image.tmdb.org/t/p/w500/tNa9C4NpY9PsbZMeHwLVCfIXrjD.jpg',
+        release_date: '2022-12-16'
+      },
+      { 
+        title: 'Black Panther: Wakanda Forever', 
+        genre: 'Acción', 
+        duration: 161, 
+        rating: 'PG-13', 
+        synopsis: 'Los habitantes de Wakanda luchan por proteger su nación después de la muerte del Rey TChalla.',
+        poster_url: 'https://image.tmdb.org/t/p/w500/sv1xJUazXeYqALP1Jq3fsg0UHU5.jpg',
+        release_date: '2022-11-11'
+      },
+      { 
+        title: 'John Wick: Capítulo 4', 
+        genre: 'Acción', 
+        duration: 169, 
+        rating: 'R', 
+        synopsis: 'John Wick busca la manera de obtener su libertad definitiva pero el Alto Table lo pone un precio muy alto.',
+        poster_url: 'https://image.tmdb.org/t/p/w500/vZLoQ3DIXd9G2t8j3zPJf3X6IKT.jpg',
+        release_date: '2023-03-24'
+      },
+      { 
+        title: 'Guardians of the Galaxy Vol. 3', 
+        genre: 'Ciencia Ficción', 
+        duration: 149, 
+        rating: 'PG-13', 
+        synopsis: 'Still reeling from Rocket’s devastating injury, the Guardians must fight to protect Rocket.',
+        poster_url: 'https://image.tmdb.org/t/p/w500/r2dfM4jgjNQyD3BK6bvzPrdXFDB.jpg',
+        release_date: '2023-05-05'
+      },
+      { 
+        title: 'La sirenita', 
+        genre: 'Familia', 
+        duration: 135, 
+        rating: 'PG', 
+        synopsis: 'Una joven sirena quiere explorar el mundo humano y se hace amiga de un príncipe.',
+        poster_url: 'https://image.tmdb.org/t/p/w500/2w7lJ9l7oX0rug3i8VfJhTqgMiS.jpg',
+        release_date: '2023-05-26'
+      },
+      { 
+        title: 'Transformers: El despertar de las bestias', 
+        genre: 'Ciencia Ficción', 
+        duration: 127, 
+        rating: 'PG-13', 
+        synopsis: 'Durante una expedición arqueológica, los Maximals se unen a los Autobots para proteger la Tierra.',
+        poster_url: 'https://image.tmdb.org/t/p/w500/gPbM0MK8Ej8SVTHYce2Hk4pgdbr.jpg',
+        release_date: '2023-06-09'
       }
     ]
 
@@ -205,12 +286,20 @@ export async function POST(request: Request) {
     const allMovies = await sql`SELECT id FROM movies`
     const allRooms = await sql`SELECT id, name FROM rooms`
 
-    // Create showtimes and their seats (Optimized)
+    // Create showtimes with different schedules per room (Optimized)
     for (const movie of allMovies) {
       for (const room of allRooms) {
-        const times = ['16:00', '19:00', '22:00']
+        // Different schedules for different rooms
+        let times: string[]
+        if (room.name === 'Sala 1') {
+          times = ['10:00', '13:00', '16:00', '19:00', '22:00'] // Morning/Afternoon movies
+        } else if (room.name === 'Sala 2') {
+          times = ['11:30', '14:30', '17:30', '20:30', '23:00'] // Mid-day schedule
+        } else {
+          times = ['12:00', '15:00', '18:00', '21:00', '23:30'] // Evening/Night movies
+        }
         
-        for (let day = 0; day < 3; day++) { // Reduced days to 3 for faster setup
+        for (let day = 0; day < 14; day++) { // 14 dias de funciones
           for (const time of times) {
             const startTime = new Date()
             startTime.setDate(startTime.getDate() + day)
