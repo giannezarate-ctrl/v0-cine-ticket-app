@@ -139,14 +139,14 @@ interface SendEmailParams {
   subject: string
   htmlContent: string
   textContent?: string
-  attachment?: {
+  attachments?: Array<{
     content: Buffer
     filename: string
     contentType: string
-  }
+  }>
 }
 
-export async function sendEmail({ to, subject, htmlContent, textContent, attachment }: SendEmailParams) {
+export async function sendEmail({ to, subject, htmlContent, textContent, attachments }: SendEmailParams) {
   const apiKey = process.env.BREVO_API_KEY || process.env.BREVO_APIKEY
   const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.BREVO_SENDER_NAME || 'correosbrevoyess@gmail.com'
   const senderName = process.env.BREVO_NAME || 'GYBIM'
@@ -175,11 +175,11 @@ export async function sendEmail({ to, subject, htmlContent, textContent, attachm
       textContent: textContent || htmlContent.replace(/<[^>]*>/g, ''),
     }
 
-    if (attachment) {
-      emailPayload.attachment = [{
-        url: `data:${attachment.contentType};base64,${attachment.content.toString('base64')}`,
-        name: attachment.filename,
-      }]
+    if (attachments && attachments.length > 0) {
+      emailPayload.attachment = attachments.map(att => ({
+        url: `data:${att.contentType};base64,${att.content.toString('base64')}`,
+        name: att.filename,
+      }))
     }
 
     const response = await fetch(`${BREVO_API_URL}/smtp/email`, {
@@ -227,12 +227,18 @@ export async function sendTicketEmail(
   })
 
   let pdfBuffer: Buffer | null = null
+  let qrPngBuffer: Buffer | null = null
   if (ticketCode) {
     try {
       pdfBuffer = await generateTicketPDF(customerName, movieTitle, showDate, showTime, seats, totalAmount, ticketCode, roomName)
-      console.log('[EMAIL] PDF generated successfully, size:', pdfBuffer.length)
+      console.log('[EMAIL] PDF generated, size:', pdfBuffer.length)
+      
+      const qrDataUrl = await QRCode.toDataURL(ticketCode, { width: 300, margin: 2 })
+      const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '')
+      qrPngBuffer = Buffer.from(base64Data, 'base64')
+      console.log('[EMAIL] QR PNG generated, size:', qrPngBuffer.length)
     } catch (err) {
-      console.error('[EMAIL] Error generating PDF:', err)
+      console.error('[EMAIL] Error generating attachments:', err)
     }
   }
 
@@ -294,8 +300,8 @@ export async function sendTicketEmail(
       <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
         <p style="margin: 0; font-size: 14px;"><strong>⚠️ Importante:</strong></p>
         <ul style="margin: 10px 0 0 20px; padding: 0; font-size: 14px;">
-          <li>Se ha adjuntado un PDF con tu entrada y codigo QR</li>
-          <li>Presenta este comprobante en la entrada del cine</li>
+          <li>Se han adjuntado archivos con tu entrada y codigo QR</li>
+          <li>Presenta el codigo QR en la entrada del cine</li>
           <li>Llega 15 minutos antes de la funcion</li>
         </ul>
       </div>
@@ -313,14 +319,28 @@ export async function sendTicketEmail(
     htmlContent,
   }
 
+  const atts: Array<{ content: Buffer; filename: string; contentType: string }> = []
+  
+  if (qrPngBuffer && ticketCode) {
+    atts.push({
+      content: qrPngBuffer,
+      filename: `qr-${ticketCode}.png`,
+      contentType: 'image/png',
+    })
+  }
+  
   if (pdfBuffer) {
+    atts.push({
+      content: pdfBuffer,
+      filename: `entrada-${ticketCode}.pdf`,
+      contentType: 'application/pdf',
+    })
+  }
+
+  if (atts.length > 0) {
     return sendEmail({
       ...emailOptions,
-      attachment: {
-        content: pdfBuffer,
-        filename: `entrada-${ticketCode}.pdf`,
-        contentType: 'application/pdf',
-      },
+      attachments: atts,
     } as SendEmailParams)
   }
 
