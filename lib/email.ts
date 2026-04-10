@@ -11,7 +11,11 @@ interface SendEmailParams {
 }
 
 export async function sendEmail({ to, subject, htmlContent, textContent }: SendEmailParams) {
-  if (!BREVO_API_KEY) {
+  const apiKey = process.env.BREVO_API_KEY || process.env.BREVO_APIKEY
+  const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.BREVO_SENDER_NAME || 'noreply@tucinema.com'
+  const senderName = process.env.BREVO_NAME || process.env.BREVO_SENDER_NAME || 'Tu Cine'
+
+  if (!apiKey) {
     console.error('BREVO_API_KEY no configurado')
     return { success: false, error: 'API key no configurada' }
   }
@@ -22,12 +26,12 @@ export async function sendEmail({ to, subject, htmlContent, textContent }: SendE
       headers: {
         'accept': 'application/json',
         'content-type': 'application/json',
-        'api-key': BREVO_API_KEY,
+        'api-key': apiKey,
       },
       body: JSON.stringify({
         sender: {
-          name: BREVO_SENDER_NAME,
-          email: BREVO_SENDER_EMAIL,
+          name: senderName,
+          email: senderEmail,
         },
         to: to.map(t => ({
           email: t.email,

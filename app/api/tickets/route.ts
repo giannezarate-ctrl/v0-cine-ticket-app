@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     const showDateTime = new Date(start_time);
     const now = new Date();
     if (showDateTime.getTime() + 24 * 60 * 60 * 1000 < now.getTime()) {
-      return NextResponse.json({ error: 'Esta funcion ya paso' }, { status: 400 })
+      return NextResponse.json({ error: '400_TIME: Esta funcion ya paso' }, { status: 400 })
     }
 
     // Resolve coordinates into seat IDs
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
     }
 
     if (seat_ids.length !== seats.length) {
-      return NextResponse.json({ error: 'Algunos asientos no existen en esta sala' }, { status: 400 })
+      return NextResponse.json({ error: `400_SEATS_MISSING: Asientos solicitados ${seats.length}, pero encontrados ${seat_ids.length}` }, { status: 400 })
     }
 
     // Check if seats are available in showtime_seats
@@ -106,13 +106,13 @@ export async function POST(request: Request) {
       FROM showtime_seats ss
       JOIN seats s ON ss.seat_id = s.id
       WHERE ss.showtime_id = ${showtime_id} 
-      AND ss.seat_id = ANY(${seat_ids})
+      AND ss.seat_id = ANY(${seat_ids}::uuid[])
       AND ss.status != 'available'
     `
 
     if (unavailableSeats.length > 0) {
       return NextResponse.json(
-        { error: 'Algunos asientos ya están reservados o vendidos' },
+        { error: '400_SEATS_TAKEN: Algunos asientos ya están reservados o vendidos' },
         { status: 400 }
       )
     }
@@ -155,21 +155,27 @@ export async function POST(request: Request) {
     const showTimeStr = showDate.toTimeString().slice(0, 5)
 
     // Send confirmation email
+    let emailStatus: { success: boolean; error?: string; data?: any } = { success: false, error: 'No email provided' }
     if (userEmail) {
-      sendTicketEmail(
-        userEmail,
-        userName,
-        movie_title,
-        showDateStr,
-        showTimeStr,
-        seatLabels,
-        total,
-        ticket.code,
-        room_name
-      ).catch(err => console.error('Error enviando email:', err))
+      try {
+        emailStatus = await sendTicketEmail(
+          userEmail,
+          userName,
+          movie_title,
+          showDateStr,
+          showTimeStr,
+          seatLabels,
+          total,
+          ticket.code,
+          room_name
+        )
+      } catch (err) {
+        console.error('Error enviando email:', err)
+        emailStatus = { success: false, error: 'Exception during email send' }
+      }
     }
 
-    return NextResponse.json({ ...ticket, seats: ticketSeats }, { status: 201 })
+    return NextResponse.json({ ...ticket, seats: ticketSeats, emailStatus }, { status: 201 })
 
   } catch (error) {
     console.error('Error creating tickets:', error)
