@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { movie_id, room_id, show_date, show_time, start_time, price } = body
 
-    if (isNaN(movie_id) || isNaN(room_id)) {
+    if (!movie_id || !room_id) {
       return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 })
     }
 
