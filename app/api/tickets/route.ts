@@ -155,21 +155,27 @@ export async function POST(request: Request) {
     const showTimeStr = showDate.toTimeString().slice(0, 5)
 
     // Send confirmation email
+    let emailStatus: { success: boolean; error?: string; data?: any } = { success: false, error: 'No email provided' }
     if (userEmail) {
-      sendTicketEmail(
-        userEmail,
-        userName,
-        movie_title,
-        showDateStr,
-        showTimeStr,
-        seatLabels,
-        total,
-        ticket.code,
-        room_name
-      ).catch(err => console.error('Error enviando email:', err))
+      try {
+        emailStatus = await sendTicketEmail(
+          userEmail,
+          userName,
+          movie_title,
+          showDateStr,
+          showTimeStr,
+          seatLabels,
+          total,
+          ticket.code,
+          room_name
+        )
+      } catch (err) {
+        console.error('Error enviando email:', err)
+        emailStatus = { success: false, error: 'Exception during email send' }
+      }
     }
 
-    return NextResponse.json({ ...ticket, seats: ticketSeats }, { status: 201 })
+    return NextResponse.json({ ...ticket, seats: ticketSeats, emailStatus }, { status: 201 })
 
   } catch (error) {
     console.error('Error creating tickets:', error)
