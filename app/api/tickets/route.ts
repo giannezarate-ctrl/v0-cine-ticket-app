@@ -156,6 +156,7 @@ export async function POST(request: Request) {
 
     // Send confirmation email
     let emailStatus: { success: boolean; error?: string; data?: any } = { success: false, error: 'No email provided' }
+    console.log('[TICKETS] Email debug - userEmail:', userEmail, 'userName:', userName)
     if (userEmail) {
       try {
         emailStatus = await sendTicketEmail(
