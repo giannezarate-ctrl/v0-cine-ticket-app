@@ -6,16 +6,16 @@ export async function GET() {
     const moviesCount = await sql`SELECT COUNT(*) as count FROM movies WHERE is_active = true OR is_active IS NULL`
     const ticketsToday = await sql`
       SELECT COUNT(*) as count FROM tickets 
-      WHERE DATE(purchase_date) = CURRENT_DATE
+      WHERE DATE(created_at) = CURRENT_DATE
     `
     const totalRevenue = await sql`
-      SELECT COALESCE(SUM(s.price), 0) as total
+      SELECT COALESCE(SUM(t.total), 0) as total
       FROM tickets t
       JOIN showtimes s ON t.showtime_id = s.id
     `
     const showtimesToday = await sql`
       SELECT COUNT(*) as count FROM showtimes 
-      WHERE DATE(show_date) = CURRENT_DATE
+      WHERE DATE(start_time) = CURRENT_DATE
     `
     
     const recentTickets = await sql`
@@ -27,12 +27,12 @@ export async function GET() {
       JOIN showtimes s ON t.showtime_id = s.id
       JOIN movies m ON s.movie_id = m.id
       JOIN rooms r ON s.room_id = r.id
-      ORDER BY t.purchase_date DESC
+      ORDER BY t.created_at DESC
       LIMIT 10
     `
     
     const salesByMovie = await sql`
-      SELECT m.title, COUNT(t.id) as tickets_sold, SUM(s.price) as revenue
+      SELECT m.title, COUNT(t.id) as tickets_sold, SUM(t.total) as revenue
       FROM movies m
       JOIN showtimes s ON m.id = s.movie_id
       JOIN tickets t ON s.id = t.showtime_id
@@ -43,7 +43,8 @@ export async function GET() {
     
     // Map to compatibility fields
     const mappedRecentTickets = recentTickets.map((t: any) => ({
-      ...t
+      ...t,
+      show_date: t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : null
     }))
 
     
