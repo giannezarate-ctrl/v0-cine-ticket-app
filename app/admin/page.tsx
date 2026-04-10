@@ -95,6 +95,10 @@ export default function AdminPage() {
   const [editMovie, setEditMovie] = useState<Movie | null>(null)
   const [editMovieDialogOpen, setEditMovieDialogOpen] = useState(false)
   
+  // Edit showtime states
+  const [editShowtime, setEditShowtime] = useState<Showtime | null>(null)
+  const [editShowtimeDialogOpen, setEditShowtimeDialogOpen] = useState(false)
+  
   // Room management states
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [roomSeats, setRoomSeats] = useState<{row: string, number: number, status: string}[]>([])
@@ -334,6 +338,54 @@ export default function AdminPage() {
     }
   }
 
+  const handleDeleteShowtime = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar esta función? Esto también eliminará los tickets asociados a ella.')) return
+    
+    try {
+      const res = await fetch(`/api/showtimes/${id}`, { method: 'DELETE' })
+      if (res.ok) fetchData()
+      else alert('Error al eliminar la función')
+    } catch (error) {
+      console.error('Error deleting showtime:', error)
+    }
+  }
+
+  const handleEditShowtime = (showtime: Showtime) => {
+    setEditShowtime(showtime)
+    setEditShowtimeDialogOpen(true)
+  }
+
+  const handleUpdateShowtime = async () => {
+    if (!editShowtime) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/showtimes/${editShowtime.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          show_date: editShowtime.show_date,
+          show_time: editShowtime.show_time,
+          price: editShowtime.price
+        })
+      })
+      
+      if (res.ok) {
+        setEditShowtimeDialogOpen(false)
+        setEditShowtime(null)
+        fetchData()
+      } else {
+        const error = await res.json()
+        alert(error.error || 'Error al actualizar la función')
+      }
+    } catch (error) {
+      console.error('Error updating showtime:', error)
+      alert('Error al actualizar la función')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+
   const handleRoomSelect = async (room: Room) => {
     setSelectedRoom(room)
     setRoomSeats([]) // Clear previous seats
@@ -343,6 +395,16 @@ export default function AdminPage() {
       if (res.ok) {
         const allTickets: Ticket[] = await res.json()
         
+        // Filter out tickets from old showtimes that already ended (e.g., 2 hours past start time)
+        const now = new Date()
+        const activeTickets = allTickets.filter(t => {
+          if (!t.show_date || !t.show_time) return false
+          const showDateTime = new Date(`${t.show_date}T${t.show_time}`)
+          // Check if showtime ended (assume it lasts 2 hours)
+          const endTime = new Date(showDateTime.getTime() + 2 * 60 * 60 * 1000)
+          return endTime > now
+        })
+        
         // Generate seat map based on room dimensions
         const seats: {row: string, number: number, status: string}[] = []
         const rowsCount = room.rows_count || 10
@@ -351,8 +413,8 @@ export default function AdminPage() {
         const rows = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, rowsCount)
         for (const row of rows) {
           for (let num = 1; num <= seatsPerRow; num++) {
-            // Check if this specific seat in this specific room is occupied
-            const hasTicket = allTickets.some((t: Ticket) => 
+            // Check if this specific seat in this specific room is occupied by an ACTIVE showtime
+            const hasTicket = activeTickets.some((t: Ticket) => 
               t.room_name === room.name && t.seat_row === row && t.seat_number === num
             )
             
@@ -989,17 +1051,39 @@ export default function AdminPage() {
                       <TableHead className="text-muted-foreground">Hora</TableHead>
                       <TableHead className="text-muted-foreground">Sala</TableHead>
                       <TableHead className="text-right text-muted-foreground">Precio</TableHead>
+                      <TableHead className="text-right text-muted-foreground">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {showtimes.map((showtime) => (
                       <TableRow key={showtime.id} className="border-border">
                         <TableCell className="text-foreground">{showtime.movie_title}</TableCell>
-                        <TableCell className="text-muted-foreground">{formatDate(showtime.show_date)}</TableCell>
+                        <TableCell className="text-muted-foreground">{formatDate(showtime.show_date || '')}</TableCell>
                         <TableCell className="text-muted-foreground">{showtime.show_time}</TableCell>
                         <TableCell className="text-muted-foreground">{showtime.room_name}</TableCell>
                         <TableCell className="text-right font-medium text-cinema-gold">
                           {formatPrice(showtime.price)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="border-border"
+                              onClick={() => handleEditShowtime(showtime)}
+                            >
+                              <Pencil className="mr-2 h-3 w-3" />
+                              Editar
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                              onClick={() => handleDeleteShowtime(showtime.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1007,6 +1091,55 @@ export default function AdminPage() {
                 </Table>
               </CardContent>
             </Card>
+
+            {/* Edit Showtime Dialog */}
+            <Dialog open={editShowtimeDialogOpen} onOpenChange={setEditShowtimeDialogOpen}>
+              <DialogContent className="border-border bg-card">
+                <DialogHeader>
+                  <DialogTitle className="text-foreground">Editar / Aplazar Función</DialogTitle>
+                  <DialogDescription>
+                    Reprograma la fecha y hora de la función o ajusta su precio.
+                  </DialogDescription>
+                </DialogHeader>
+                {editShowtime && (
+                  <div className="grid gap-4 py-4">
+                    <div className="text-sm font-medium text-foreground mb-2">
+                      Película: <span className="text-primary">{editShowtime.movie_title}</span> <br/>
+                      Sala: <span className="text-primary">{editShowtime.room_name}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <Input 
+                        type="date" 
+                        className="border-border bg-input"
+                        value={editShowtime.show_date}
+                        onChange={(e) => setEditShowtime({...editShowtime, show_date: e.target.value})}
+                      />
+                      <Input 
+                        type="time" 
+                        className="border-border bg-input"
+                        value={editShowtime.show_time}
+                        onChange={(e) => setEditShowtime({...editShowtime, show_time: e.target.value})}
+                      />
+                    </div>
+                    <Input 
+                      type="number" 
+                      placeholder="Precio" 
+                      className="border-border bg-input"
+                      value={editShowtime.price}
+                      onChange={(e) => setEditShowtime({...editShowtime, price: Number(e.target.value)})}
+                    />
+                    <Button 
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
+                      onClick={handleUpdateShowtime}
+                      disabled={saving}
+                    >
+                      {saving ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                      Guardar Cambios
+                    </Button>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           {/* Rooms Tab */}

@@ -3,10 +3,10 @@ import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
   try {
-    // Clean up past showtimes (delete ones that ended 2 hours ago)
+    // Clean up past showtimes (delete ones that ended 24 hours ago to avoid timezone glitches)
     await sql`
       DELETE FROM showtimes 
-      WHERE start_time < NOW() - INTERVAL '2 hours'
+      WHERE start_time < NOW() - INTERVAL '24 hours'
     `
 
     const { searchParams } = new URL(request.url)
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
         FROM showtimes s
         JOIN movies m ON s.movie_id = m.id
         JOIN rooms r ON s.room_id = r.id
-        WHERE s.movie_id = ${movieId} AND (s.start_time > NOW())
+        WHERE s.movie_id = ${movieId} AND s.start_time > NOW() - INTERVAL '24 hours'
         ORDER BY s.start_time
       `
     } else {
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
         FROM showtimes s
         JOIN movies m ON s.movie_id = m.id
         JOIN rooms r ON s.room_id = r.id
-        WHERE s.start_time > NOW()
+        WHERE s.start_time > NOW() - INTERVAL '24 hours'
         ORDER BY s.start_time
       `
     }
