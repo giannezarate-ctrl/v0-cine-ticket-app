@@ -1,9 +1,69 @@
 import QRCode from 'qrcode'
+import { v2 as cloudinary } from 'cloudinary'
 
 const BREVO_API_URL = 'https://api.brevo.com/v3'
 const BREVO_API_KEY = process.env.BREVO_API_KEY || process.env.BREVO_APIKEY
 const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || process.env.BREVO_SENDER_NAME || 'noreply@tucinema.com'
 const BREVO_SENDER_NAME = process.env.BREVO_NAME || process.env.BREVO_SENDER_NAME || 'Tu Cine'
+
+cloudinary.config({
+  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+})
+
+async function generateQRCodeImage(ticketCode: string): Promise<string | null> {
+  try {
+    const qrBuffer = await QRCode.toBuffer(ticketCode, {
+      width: 300,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF',
+      },
+    })
+
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'cine-qr',
+          public_id: `ticket-${ticketCode}`,
+          resource_type: 'image',
+        },
+        (error, result) => {
+          if (error) {
+            console.error('Cloudinary upload error:', error)
+            resolve(null)
+          } else {
+            resolve(result?.secure_url || null)
+          }
+        }
+      )
+      uploadStream.end(qrBuffer)
+    })
+  } catch (err) {
+    console.error('Error generating QR code:', err)
+    return null
+  }
+}
+
+async function generateQRBase64(ticketCode: string): Promise<string> {
+  try {
+    const dataUrl = await QRCode.toDataURL(ticketCode, {
+      width: 250,
+      margin: 2,
+      color: { dark: '#000000', light: '#FFFFFF' },
+    })
+    return dataUrl
+  } catch (err) {
+    console.error('Error generating QR base64:', err)
+    return ''
+  }
+}
+
+function getGoogleChartsQRUrl(ticketCode: string): string {
+  return `https://chart.googleapis.com/chart?cht=qr&chs=250x250&chco=000000&chl=${encodeURIComponent(ticketCode)}&chf=bg,FFFFFF`
+}
 
 interface SendEmailParams {
   to: { email: string; name?: string }[]
@@ -82,21 +142,8 @@ export async function sendTicketEmail(
     day: 'numeric',
   })
 
-  let qrCodeDataUrl = ''
-  if (ticketCode) {
-    try {
-      qrCodeDataUrl = await QRCode.toDataURL(ticketCode, {
-        width: 200,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF',
-        },
-      })
-    } catch (err) {
-      console.error('Error generating QR code:', err)
-    }
-  }
+  const qrCodeUrl = ticketCode ? getGoogleChartsQRUrl(ticketCode) : ''
+  console.log('[EMAIL] QR Code URL:', qrCodeUrl)
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -153,10 +200,10 @@ export async function sendTicketEmail(
         </div>
       </div>
       
-      ${qrCodeDataUrl ? `
+      ${qrCodeUrl ? `
       <div style="text-align: center; margin: 25px 0; padding: 20px; background: white; border-radius: 10px; border: 2px solid #e50914;">
         <p style="margin: 0 0 15px 0; font-size: 14px; color: #666;"><strong>Escanea este codigo QR en la entrada</strong></p>
-        <img src="${qrCodeDataUrl}" alt="Codigo QR" style="width: 180px; height: 180px;" />
+        <img src="${qrCodeUrl}" alt="Codigo QR" style="width: 180px; height: 180px;" />
       </div>
       ` : ''}
       

@@ -68,12 +68,18 @@ export function Header() {
     }
   }
 
-  const navLinks = [
+  interface NavLink {
+    href: string
+    label: string
+    icon?: React.ElementType
+  }
+
+  const navLinks: NavLink[] = [
     { href: '/', label: 'Cartelera' },
     { href: '/funciones', label: 'Funciones' },
   ]
 
-  const adminLinks = [
+  const adminLinks: NavLink[] = [
     { href: '/validar', label: 'Validar Tiquete', icon: Ticket },
   ]
 
