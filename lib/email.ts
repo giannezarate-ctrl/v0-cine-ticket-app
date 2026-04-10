@@ -1,5 +1,6 @@
 import QRCode from 'qrcode'
 import { v2 as cloudinary } from 'cloudinary'
+import PDFDocument from 'pdfkit'
 
 const BREVO_API_URL = 'https://api.brevo.com/v3'
 const BREVO_API_KEY = process.env.BREVO_API_KEY || process.env.BREVO_APIKEY
@@ -61,8 +62,76 @@ async function generateQRBase64(ticketCode: string): Promise<string> {
   }
 }
 
-function getGoogleChartsQRUrl(ticketCode: string): string {
-  return `https://chart.googleapis.com/chart?cht=qr&chs=250x250&chco=000000&chl=${encodeURIComponent(ticketCode)}&chf=bg,FFFFFF`
+async function generateTicketPDF(
+  customerName: string,
+  movieTitle: string,
+  showDate: string,
+  showTime: string,
+  seats: string[],
+  totalAmount: number,
+  ticketCode: string,
+  roomName?: string
+): Promise<Buffer> {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: 'A4', margin: 50 })
+      const chunks: Buffer[] = []
+      
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk))
+      doc.on('end', () => resolve(Buffer.concat(chunks)))
+      doc.on('error', reject)
+
+      doc.fontSize(28).fillColor('#e50914').text('Tu Cine', { align: 'center' })
+      doc.moveDown()
+      doc.fontSize(16).fillColor('#666').text('Comprobante de compra', { align: 'center' })
+      doc.moveDown(2)
+
+      doc.fontSize(12).fillColor('#888').text('CODIGO DE ENTRADA', { align: 'center' })
+      doc.moveDown(0.5)
+      doc.fontSize(32).fillColor('#e50914').text(ticketCode, { align: 'center' })
+      doc.moveDown(2)
+
+      doc.fontSize(14).fillColor('#333').text(`Hola ${customerName},`, { align: 'left' })
+      doc.moveDown(0.5)
+      doc.fontSize(12).fillColor('#333').text('Gracias por tu compra! Aqui tienes tu comprobante:', { align: 'left' })
+      doc.moveDown(2)
+
+      doc.fontSize(20).fillColor('#333').text(movieTitle, { align: 'left' })
+      doc.moveDown(1)
+
+      const dateObj = new Date(showDate)
+      const formattedDate = dateObj.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+
+      doc.fontSize(12).fillColor('#666')
+      doc.text(`Fecha: ${formattedDate}`, { align: 'left' })
+      doc.text(`Hora: ${showTime}`, { align: 'left' })
+      if (roomName) doc.text(`Sala: ${roomName}`, { align: 'left' })
+      doc.text(`Butacas: ${seats.join(', ')}`, { align: 'left' })
+      doc.moveDown(1)
+
+      doc.fontSize(12).fillColor('#333').text(`Cantidad: ${seats.length} entrada${seats.length > 1 ? 's' : ''}`, { align: 'left' })
+      doc.fontSize(18).fillColor('#e50914').text(`TOTAL PAGADO: $${totalAmount.toLocaleString('es-CO')}`, { align: 'left' })
+      doc.moveDown(2)
+
+      const qrBuffer = await QRCode.toBuffer(ticketCode, { width: 200, margin: 2 })
+      doc.image(qrBuffer, { fit: [150, 150], align: 'center' })
+      doc.moveDown(1)
+      doc.fontSize(10).fillColor('#666').text('Escanea este codigo QR en la entrada', { align: 'center' })
+      doc.moveDown(2)
+
+      doc.fontSize(10).fillColor('#666').text('Importante:', { align: 'left' })
+      doc.text('- Presenta este comprobante en la entrada del cine', { align: 'left' })
+      doc.text('- Llega 15 minutos antes de la funcion', { align: 'left' })
+      doc.text('- No se permiten entradas tarde', { align: 'left' })
+      doc.moveDown(2)
+
+      doc.fontSize(8).fillColor('#999').text('Tu Cine - La mejor experiencia cinematografica', { align: 'center' })
+
+      doc.end()
+    } catch (err) {
+      reject(err)
+    }
+  })
 }
 
 interface SendEmailParams {
@@ -70,9 +139,14 @@ interface SendEmailParams {
   subject: string
   htmlContent: string
   textContent?: string
+  attachment?: {
+    content: Buffer
+    filename: string
+    contentType: string
+  }
 }
 
-export async function sendEmail({ to, subject, htmlContent, textContent }: SendEmailParams) {
+export async function sendEmail({ to, subject, htmlContent, textContent, attachment }: SendEmailParams) {
   const apiKey = process.env.BREVO_API_KEY || process.env.BREVO_APIKEY
   const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.BREVO_SENDER_NAME || 'correosbrevoyess@gmail.com'
   const senderName = process.env.BREVO_NAME || 'GYBIM'
@@ -86,6 +160,28 @@ export async function sendEmail({ to, subject, htmlContent, textContent }: SendE
 
   try {
     console.log('[EMAIL] Sending to:', to.map(t => t.email).join(', '))
+    
+    const emailPayload: any = {
+      sender: {
+        name: senderName,
+        email: senderEmail,
+      },
+      to: to.map(t => ({
+        email: t.email,
+        name: t.name || '',
+      })),
+      subject,
+      htmlContent,
+      textContent: textContent || htmlContent.replace(/<[^>]*>/g, ''),
+    }
+
+    if (attachment) {
+      emailPayload.attachment = [{
+        url: `data:${attachment.contentType};base64,${attachment.content.toString('base64')}`,
+        name: attachment.filename,
+      }]
+    }
+
     const response = await fetch(`${BREVO_API_URL}/smtp/email`, {
       method: 'POST',
       headers: {
@@ -93,19 +189,7 @@ export async function sendEmail({ to, subject, htmlContent, textContent }: SendE
         'content-type': 'application/json',
         'api-key': apiKey,
       },
-      body: JSON.stringify({
-        sender: {
-          name: senderName,
-          email: senderEmail,
-        },
-        to: to.map(t => ({
-          email: t.email,
-          name: t.name || '',
-        })),
-        subject,
-        htmlContent,
-        textContent: textContent || htmlContent.replace(/<[^>]*>/g, ''),
-      }),
+      body: JSON.stringify(emailPayload),
     })
 
     const data = await response.json()
@@ -142,8 +226,15 @@ export async function sendTicketEmail(
     day: 'numeric',
   })
 
-  const qrCodeUrl = ticketCode ? getGoogleChartsQRUrl(ticketCode) : ''
-  console.log('[EMAIL] QR Code URL:', qrCodeUrl)
+  let pdfBuffer: Buffer | null = null
+  if (ticketCode) {
+    try {
+      pdfBuffer = await generateTicketPDF(customerName, movieTitle, showDate, showTime, seats, totalAmount, ticketCode, roomName)
+      console.log('[EMAIL] PDF generated successfully, size:', pdfBuffer.length)
+    } catch (err) {
+      console.error('[EMAIL] Error generating PDF:', err)
+    }
+  }
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -200,19 +291,12 @@ export async function sendTicketEmail(
         </div>
       </div>
       
-      ${qrCodeUrl ? `
-      <div style="text-align: center; margin: 25px 0; padding: 20px; background: white; border-radius: 10px; border: 2px solid #e50914;">
-        <p style="margin: 0 0 15px 0; font-size: 14px; color: #666;"><strong>Escanea este codigo QR en la entrada</strong></p>
-        <img src="${qrCodeUrl}" alt="Codigo QR" style="width: 180px; height: 180px;" />
-      </div>
-      ` : ''}
-      
       <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
         <p style="margin: 0; font-size: 14px;"><strong>⚠️ Importante:</strong></p>
         <ul style="margin: 10px 0 0 20px; padding: 0; font-size: 14px;">
-          <li>Presenta este correo o el codigo QR en la entrada del cine</li>
+          <li>Se ha adjuntado un PDF con tu entrada y codigo QR</li>
+          <li>Presenta este comprobante en la entrada del cine</li>
           <li>Llega 15 minutos antes de la funcion</li>
-          <li>No se permiten entradas tarde</li>
         </ul>
       </div>
       
@@ -223,11 +307,24 @@ export async function sendTicketEmail(
     </div>
   `
 
-  return sendEmail({
+  const emailOptions = {
     to: [{ email: customerEmail, name: customerName }],
     subject: `🎬 Entrada: ${movieTitle} - ${formattedDate}`,
     htmlContent,
-  })
+  }
+
+  if (pdfBuffer) {
+    return sendEmail({
+      ...emailOptions,
+      attachment: {
+        content: pdfBuffer,
+        filename: `entrada-${ticketCode}.pdf`,
+        contentType: 'application/pdf',
+      },
+    } as SendEmailParams)
+  }
+
+  return sendEmail(emailOptions as SendEmailParams)
 }
 
 export async function sendWelcomeEmail(email: string, name: string) {
