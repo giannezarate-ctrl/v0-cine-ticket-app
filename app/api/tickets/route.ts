@@ -17,6 +17,7 @@ export async function GET() {
       SELECT 
         t.*, 
         m.title as movie_title, 
+        m.id as movie_id,
         s.start_time as show_time, 
         r.name as room_name,
         u.name as customer_name,

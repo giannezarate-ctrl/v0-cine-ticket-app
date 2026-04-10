@@ -83,6 +83,7 @@ export function SeatSelector({ showtime, movie }: SeatSelectorProps) {
   }, [])
 
   useEffect(() => {
+    console.log('[SeatSelector] showtime.id changed:', showtime.id, 'showtime:', showtime.show_date, showtime.show_time)
     fetchOccupiedSeats()
     setSelectedSeats([])
   }, [showtime.id])

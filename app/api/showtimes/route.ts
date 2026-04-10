@@ -19,8 +19,8 @@ export async function GET(request: Request) {
         FROM showtimes s
         JOIN movies m ON s.movie_id = m.id
         JOIN rooms r ON s.room_id = r.id
-        WHERE s.movie_id = ${movieId} AND s.start_time > NOW()
-        ORDER BY s.start_time
+        WHERE s.movie_id = ${movieId}
+        ORDER BY s.start_time ASC
       `
     } else {
       showtimes = await sql`
@@ -33,8 +33,7 @@ export async function GET(request: Request) {
         FROM showtimes s
         JOIN movies m ON s.movie_id = m.id
         JOIN rooms r ON s.room_id = r.id
-        WHERE s.start_time > NOW()
-        ORDER BY s.start_time
+        ORDER BY s.start_time DESC
       `
     }
 
@@ -48,7 +47,7 @@ export async function GET(request: Request) {
         rows_count: 10,
         seats_per_row: Math.ceil((s.capacity || 0) / 10)
       }
-    }).filter((s: any) => s.available_seats > 0)
+    })
 
     console.log('SHOWTIMES:', mapped)
 

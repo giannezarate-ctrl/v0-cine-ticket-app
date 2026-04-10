@@ -134,7 +134,9 @@ export default function AdminPage() {
 
       if (statsRes.ok) setStats(await statsRes.json())
       if (moviesRes.ok) setMovies(await moviesRes.json())
-      if (showtimesRes.ok) setShowtimes(await showtimesRes.json())
+      const showtimesData = await showtimesRes.json()
+      console.log('[ADMIN] Showtimes loaded:', showtimesData.length, showtimesData.map((s: any) => ({ id: s.id, movie: s.movie_title, date: s.show_date, time: s.show_time })))
+      if (showtimesRes.ok) setShowtimes(showtimesData)
       if (ticketsRes.ok) setTickets(await ticketsRes.json())
       if (roomsRes.ok) setRooms(await roomsRes.json())
     } catch (error) {

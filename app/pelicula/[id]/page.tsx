@@ -188,6 +188,7 @@ export default function MovieDetailPage({ params }: { params: Promise<{ id: stri
         {/* Seat Selector */}
         {selectedShowtime && movie && (
           <SeatSelector 
+            key={selectedShowtime.id}
             showtime={selectedShowtime} 
             movie={movie}
           />
