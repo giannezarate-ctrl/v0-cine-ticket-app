@@ -45,15 +45,21 @@ export async function POST(request: Request) {
     const ticket = tickets[0]
     
     const now = new Date()
+    const todayStr = now.toISOString().split('T')[0]
+    const nowMinutes = now.getHours() * 60 + now.getMinutes()
     
-    const startTime = ticket.start_time ? new Date(ticket.start_time) : null
-    const endTime = ticket.end_time ? new Date(ticket.end_time) : null
+    const startTimeStr = String(ticket.start_time)
+    const endTimeStr = String(ticket.end_time)
     
-    const showtimeDate = startTime ? startTime.toLocaleDateString('en-CA') : null
-    const todayDate = now.toLocaleDateString('en-CA')
+    const startDatePart = startTimeStr.split(' ')[0]
+    const startTimePart = startTimeStr.split(' ')[1]?.slice(0, 5) || null
     
-    if (showtimeDate !== todayDate) {
-      const isPast = showtimeDate < todayDate
+    const endTimePart = endTimeStr.split(' ')[1]?.slice(0, 5) || null
+    
+    const showtimeDate = startDatePart
+    
+    if (showtimeDate !== todayStr) {
+      const isPast = showtimeDate < todayStr
       return NextResponse.json({
         valid: false,
         error: isPast 
@@ -62,25 +68,29 @@ export async function POST(request: Request) {
         ticket: {
           ...ticket,
           show_date: showtimeDate,
-          show_time: startTime ? startTime.toTimeString().slice(0, 5) : null,
+          show_time: startTimePart,
           seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
           seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
         }
       }, { status: 400 })
     }
     
-    const tenMinutesBefore = startTime ? new Date(startTime.getTime() - 10 * 60 * 1000) : null
+    const [startHour, startMin] = (startTimePart || '00:00').split(':').map(Number)
+    const [endHour, endMin] = (endTimePart || '00:00').split(':').map(Number)
+    const startMinutes = startHour * 60 + startMin
+    const endMinutes = endHour * 60 + endMin
+    const tenMinutesBefore = startMinutes - 10
     
-    const canValidate = startTime && endTime && now >= tenMinutesBefore && now <= endTime
+    const canValidate = nowMinutes >= tenMinutesBefore && nowMinutes <= endMinutes
     
     if (!canValidate) {
       let timeError = ''
       
-      if (now < tenMinutesBefore!) {
-        const waitMinutes = Math.ceil((tenMinutesBefore!.getTime() - now.getTime()) / 60000)
-        timeError = `Es muy pronto para validar. La función inicia a las ${startTime ? startTime.toTimeString().slice(0, 5) : 'N/A'}. Debes esperar ${waitMinutes} minuto(s).`
+      if (nowMinutes < tenMinutesBefore) {
+        const waitMinutes = tenMinutesBefore - nowMinutes
+        timeError = `Es muy pronto para validar. La función inicia a las ${startTimePart}. Debes esperar ${waitMinutes} minuto(s).`
       } else {
-        timeError = `La función ya terminó. Esta función terminó a las ${endTime ? endTime.toTimeString().slice(0, 5) : 'N/A'}.`
+        timeError = `La función ya terminó. Esta función terminó a las ${endTimePart}.`
       }
       
         return NextResponse.json({
@@ -89,7 +99,7 @@ export async function POST(request: Request) {
         ticket: {
           ...ticket,
           show_date: showtimeDate,
-          show_time: startTime ? startTime.toTimeString().slice(0, 5) : null,
+          show_time: startTimePart,
           seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
           seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
         }
@@ -99,7 +109,7 @@ export async function POST(request: Request) {
     const formattedTicket = {
       ...ticket,
       show_date: showtimeDate,
-      show_time: startTime ? startTime.toTimeString().slice(0, 5) : null,
+      show_time: startTimePart,
       seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
       seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
     }
