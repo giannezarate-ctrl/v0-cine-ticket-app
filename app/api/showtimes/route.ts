@@ -189,11 +189,11 @@ export async function POST(request: Request) {
       VALUES (
         ${movie_id}::uuid, 
         ${room_id}::uuid, 
-        ${startDateTime}::timestamp at time zone 'America/Sao_Paulo', 
-        ${endDateTime}::timestamp at time zone 'America/Sao_Paulo', 
+        make_timestamptz(${startDateTime}, '${TIMEZONE}'), 
+        make_timestamptz(${endDateTime}, '${TIMEZONE}'), 
         ${price}
       )
-      RETURNING id, movie_id, room_id, start_time AT TIME ZONE 'America/Sao_Paulo' as start_time_local, end_time AT TIME ZONE 'America/Sao_Paulo' as end_time_local, price, created_at
+      RETURNING id, movie_id, room_id, start_time AT TIME ZONE ${TIMEZONE} as start_time_local, end_time AT TIME ZONE ${TIMEZONE} as end_time_local, price, created_at
     `
 
     const showtimeId = result[0].id
