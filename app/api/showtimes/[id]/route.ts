@@ -9,12 +9,6 @@ import {
   minutesToTime 
 } from '@/lib/timezone'
 
-function minutesToTime(minutos: number): string {
-  const h = Math.floor(minutos / 60)
-  const m = minutos % 60
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-}
-
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
