@@ -1,6 +1,20 @@
 import { sql } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
+function extractTime(str: string): string | null {
+  const parts = str.split(' ')
+  if (parts.length === 2 && parts[1].includes(':')) return parts[1].slice(0, 5)
+  if (parts.length >= 5 && parts[4].includes(':')) return parts[4].slice(0, 5)
+  return null
+}
+
+function extractDate(str: string): string | null {
+  const parts = str.split(' ')
+  if (parts.length === 2 && parts[0].match(/^\d{4}-\d{2}-\d{2}$/)) return parts[0]
+  if (parts.length >= 4) return String(new Date(str)).slice(11, 15) + '-' + String(new Date(str).getMonth() + 1).padStart(2, '0') + '-' + String(parts[2]).padStart(2, '0')
+  return null
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json()
@@ -50,8 +64,9 @@ export async function POST(request: Request) {
     const startTimeStr = String(ticket.start_time)
     const endTimeStr = String(ticket.end_time)
     
-    const startTimePart = startTimeStr.split(' ')[1]?.slice(0, 5) || null
-    const endTimePart = endTimeStr.split(' ')[1]?.slice(0, 5) || null
+    const startTimePart = extractTime(startTimeStr)
+    const endTimePart = extractTime(endTimeStr)
+    const showDate = startTimeStr.split(' ')[0] || startTimeStr.slice(11, 15) + '-' + String(new Date(startTimeStr).getMonth() + 1).padStart(2, '0') + '-' + String(new Date(startTimeStr).getDate()).padStart(2, '0')
     
     const [startHour, startMin] = (startTimePart || '00:00').split(':').map(Number)
     const [endHour, endMin] = (endTimePart || '00:00').split(':').map(Number)
@@ -76,7 +91,7 @@ export async function POST(request: Request) {
         error: timeError,
         ticket: {
           ...ticket,
-          show_date: startTimeStr.split(' ')[0],
+          show_date: showDate,
           show_time: startTimePart,
           seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
           seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
@@ -86,7 +101,7 @@ export async function POST(request: Request) {
     
     const formattedTicket = {
       ...ticket,
-      show_date: startTimeStr.split(' ')[0],
+      show_date: showDate,
       show_time: startTimePart,
       seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
       seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
