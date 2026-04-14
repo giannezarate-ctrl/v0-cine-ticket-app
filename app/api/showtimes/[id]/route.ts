@@ -102,12 +102,8 @@ export async function PUT(
 
     const endTimeFormatted = minutesToTime(nuevaInicio + durationMinutes)
     
-    const [year, month, day] = show_date.split('-').map(Number)
-    const nextDay = new Date(year, month - 1, day + 1)
-    const actualDate = `${nextDay.getFullYear()}-${String(nextDay.getMonth() + 1).padStart(2, '0')}-${String(nextDay.getDate()).padStart(2, '0')}`
-    
-    const startDateTime = `${actualDate} ${show_time}:00`
-    const endDateTime = `${actualDate} ${endTimeFormatted}:00`
+    const startDateTime = `${show_date} ${show_time}:00`
+    const endDateTime = `${show_date} ${endTimeFormatted}:00`
 
     const result = await sql`
       UPDATE showtimes 
