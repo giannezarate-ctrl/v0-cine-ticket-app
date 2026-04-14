@@ -11,6 +11,7 @@ export async function GET() {
         s.movie_id,
         s.room_id,
         s.start_time,
+        s.end_time,
         s.price,
         r.name as room_name,
         m.id as m_id,
@@ -33,10 +34,12 @@ export async function GET() {
     // Map to include date and time fields for the frontend
     const mapped = showtimes.map((s: any) => {
       const dt = new Date(s.start_time)
+      const et = s.end_time ? new Date(s.end_time) : null
       return {
         ...s,
         date: dt.toISOString().split('T')[0],
-        time: dt.toTimeString().slice(0, 5)
+        time: dt.toTimeString().slice(0, 5),
+        end_time_display: et ? et.toTimeString().slice(0, 5) : null
       }
     })
 

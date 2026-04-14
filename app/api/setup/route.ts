@@ -76,6 +76,7 @@ export async function POST(request: Request) {
         movie_id UUID REFERENCES movies(id) ON DELETE CASCADE,
         room_id UUID REFERENCES rooms(id),
         start_time TIMESTAMP NOT NULL,
+        end_time TIMESTAMP NOT NULL,
         price DECIMAL(10,2) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -283,7 +284,7 @@ export async function POST(request: Request) {
     }
 
     // Get all movies and rooms
-    const allMovies = await sql`SELECT id FROM movies`
+    const allMovies = await sql`SELECT id, duration FROM movies`
     const allRooms = await sql`SELECT id, name FROM rooms`
 
     // Create showtimes with different schedules per room (Optimized)
@@ -306,11 +307,14 @@ export async function POST(request: Request) {
             const [hours, minutes] = time.split(':')
             startTime.setHours(parseInt(hours), parseInt(minutes), 0, 0)
 
+            const durationMinutes = movie.duration || 120
+            const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000)
+
             const price = room.name === 'Sala 3' ? 18000 : 15000
 
             const [showtime] = await sql`
-              INSERT INTO showtimes (movie_id, room_id, start_time, price)
-              VALUES (${movie.id}, ${room.id}, ${startTime.toISOString()}, ${price})
+              INSERT INTO showtimes (movie_id, room_id, start_time, end_time, price)
+              VALUES (${movie.id}, ${room.id}, ${startTime.toISOString()}, ${endTime.toISOString()}, ${price})
               RETURNING id
             `
 

@@ -50,7 +50,8 @@ import {
   PieChart,
   RefreshCw,
   LogOut,
-  LogIn
+  LogIn,
+  AlertCircle
 } from 'lucide-react'
 
 interface Stats {
@@ -81,6 +82,12 @@ export default function AdminPage() {
   })
   const [newShowtime, setNewShowtime] = useState({
     movie_id: '', room_id: '', show_date: '', show_time: '', price: ''
+  })
+  const [showtimeError, setShowtimeError] = useState<string | null>(null)
+
+  const timeOptions = Array.from({ length: 14 }, (_, i) => {
+    const hour = (10 + i).toString().padStart(2, '0')
+    return { value: `${hour}:00`, label: `${hour}:00` }
   })
   const [movieDialogOpen, setMovieDialogOpen] = useState(false)
   const [showtimeDialogOpen, setShowtimeDialogOpen] = useState(false)
@@ -298,11 +305,7 @@ export default function AdminPage() {
         fetchData()
       } else {
         const data = await res.json()
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: data.error || 'No se pudo crear la función',
-        })
+        setShowtimeError(data.error || 'No se pudo crear la función')
       }
     } catch (error) {
       toast({
@@ -1061,7 +1064,7 @@ export default function AdminPage() {
           <TabsContent value="funciones" className="space-y-6">
             <div className="flex justify-between">
               <h2 className="text-xl font-bold text-foreground">Programación de Funciones</h2>
-              <Dialog open={showtimeDialogOpen} onOpenChange={setShowtimeDialogOpen}>
+              <Dialog open={showtimeDialogOpen} onOpenChange={(open) => { setShowtimeDialogOpen(open); if (open) setShowtimeError(null); }}>
                 <DialogTrigger asChild>
                   <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
                     <Plus className="mr-2 h-4 w-4" />
@@ -1107,12 +1110,18 @@ export default function AdminPage() {
                         value={newShowtime.show_date}
                         onChange={(e) => setNewShowtime({...newShowtime, show_date: e.target.value})}
                       />
-                      <Input 
-                        type="time" 
-                        className="border-border bg-input"
-                        value={newShowtime.show_time}
-                        onChange={(e) => setNewShowtime({...newShowtime, show_time: e.target.value})}
-                      />
+                      <Select value={newShowtime.show_time} onValueChange={(v) => setNewShowtime({...newShowtime, show_time: v})}>
+                        <SelectTrigger className="border-border bg-input">
+                          <SelectValue placeholder="Hora" />
+                        </SelectTrigger>
+                        <SelectContent className="border-border bg-card">
+                          {timeOptions.map((t) => (
+                            <SelectItem key={t.value} value={t.value}>
+                              {t.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <Input 
                       type="number" 
@@ -1121,6 +1130,29 @@ export default function AdminPage() {
                       value={newShowtime.price}
                       onChange={(e) => setNewShowtime({...newShowtime, price: e.target.value})}
                     />
+                    {showtimeError && (
+                      <div className="bg-gradient-to-r from-red-500/10 to-orange-500/10 border border-red-500/30 rounded-xl p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-start gap-3">
+                          <div className="bg-red-500/20 rounded-full p-2 flex-shrink-0">
+                            <AlertCircle className="h-5 w-5 text-red-500" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-red-500 text-sm font-semibold">¡Sala Ocupada!</p>
+                            <p className="text-muted-foreground text-sm mt-1">{showtimeError}</p>
+                          </div>
+                        </div>
+                        <div className="flex justify-end mt-3">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20 hover:text-red-500"
+                            onClick={() => setShowtimeError(null)}
+                          >
+                            Entendido
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                     <Button 
                       className="bg-primary text-primary-foreground hover:bg-primary/90"
                       onClick={handleAddShowtime}
@@ -1207,12 +1239,18 @@ export default function AdminPage() {
                         value={editShowtime.show_date}
                         onChange={(e) => setEditShowtime({...editShowtime, show_date: e.target.value})}
                       />
-                      <Input 
-                        type="time" 
-                        className="border-border bg-input"
-                        value={editShowtime.show_time}
-                        onChange={(e) => setEditShowtime({...editShowtime, show_time: e.target.value})}
-                      />
+                      <Select value={editShowtime.show_time} onValueChange={(v) => setEditShowtime({...editShowtime, show_time: v})}>
+                        <SelectTrigger className="border-border bg-input">
+                          <SelectValue placeholder="Hora" />
+                        </SelectTrigger>
+                        <SelectContent className="border-border bg-card">
+                          {timeOptions.map((t) => (
+                            <SelectItem key={t.value} value={t.value}>
+                              {t.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <Input 
                       type="number" 
