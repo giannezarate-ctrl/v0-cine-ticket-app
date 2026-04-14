@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Header } from '@/components/header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -1205,107 +1206,73 @@ export default function AdminPage() {
                       </SelectContent>
                     </Select>
                     
-                    {/* Calendario Visual */}
-                    <div className="border border-border rounded-lg p-4 bg-input/30">
-                      <div className="flex items-center justify-between mb-4">
-                        <Button variant="ghost" size="sm" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1))}>
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <span className="font-semibold text-foreground">
-                          {calendarMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
-                        </span>
-                        <Button variant="ghost" size="sm" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1))}>
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-7 gap-1 text-center mb-2">
-                        {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => (
-                          <div key={d} className="text-xs text-muted-foreground font-medium">{d}</div>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-7 gap-1">
-                        {getDaysInMonth(calendarMonth).map((day, idx) => {
-                          if (!day) return <div key={`empty-${idx}`} />
-                          const dateStr = getDateStr(day)
-                          const isSelected = newShowtime.show_date === dateStr
-                          const hasFunc = hasShowtimes(dateStr)
-                          return (
-                            <button
-                              key={day}
-                              onClick={() => setNewShowtime({...newShowtime, show_date: dateStr})}
-                              className={`h-8 w-8 rounded-full text-sm flex items-center justify-center transition-all
-                                ${isSelected ? 'bg-primary text-primary-foreground font-bold' : ''}
-                                ${!isSelected && hasFunc ? 'bg-red-500/80 text-white font-medium' : ''}
-                                ${!isSelected && !hasFunc ? 'bg-muted text-muted-foreground hover:bg-muted/80' : ''}
-                              `}
-                            >
-                              {day}
-                            </button>
-                          )
-                        })}
-                      </div>
-                      <div className="flex items-center justify-center gap-4 mt-3 text-xs">
-                        <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
-                          <span className="text-muted-foreground">Con funciones</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 rounded-full bg-muted"></div>
-                          <span className="text-muted-foreground">Sin funciones</span>
-                        </div>
-                      </div>
+                    {/* Selector de fecha manual */}
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Fecha de la función</Label>
+                      <Input 
+                        type="date" 
+                        className="border-border bg-input"
+                        value={newShowtime.show_date}
+                        onChange={(e) => setNewShowtime({...newShowtime, show_date: e.target.value})}
+                      />
                     </div>
 
-                    {/* Horarios del día seleccionado */}
+                    {/* Horarios disponibles */}
                     {newShowtime.show_date && newShowtime.room_id && (
                       <div className="border border-border rounded-lg p-4 bg-input/30">
                         <h4 className="text-sm font-semibold text-foreground mb-3">
-                          Horarios del {newShowtime.show_date.split('-')[2]} de {calendarMonth.toLocaleDateString('es-ES', { month: 'long' })}
+                          Horarios disponibles
                         </h4>
                         {(() => {
                           const dayShowtimes = getShowtimesForDay(newShowtime.show_date)
                           const selectedMovie = movies.find(m => m.id === newShowtime.movie_id)
                           const selectedDuration = selectedMovie?.duration || 120
-                          const allSlots = Array.from({ length: 15 }, (_, i) => 10 + i)
+                          const validHours: number[] = []
+                          
+                          for (let h = 10; h < 24; h++) {
+                            const endHour = h + Math.ceil(selectedDuration / 60) + 0.25
+                            if (endHour <= 23) {
+                              validHours.push(h)
+                            }
+                          }
                           
                           return (
                             <div className="space-y-3">
                               {selectedMovie && (
                                 <div className="text-xs text-muted-foreground bg-primary/10 p-2 rounded">
-                                  <span className="font-semibold">"{selectedMovie.title}"</span> ({selectedDuration} min)
+                                  <span className="font-semibold">"{selectedMovie.title}"</span> ({selectedDuration} min) - Horario válido: {validHours[0]}:00 a {validHours[validHours.length - 1] + 1}:00
                                 </div>
                               )}
-                              <div className="grid grid-cols-5 gap-1">
-                                {allSlots.map(hour => {
-                                  const { blocked, conflictingMovie } = checkTimeSlotBlocked(hour, selectedDuration, dayShowtimes)
+                              <div className="grid grid-cols-6 gap-1">
+                                {validHours.map(hour => {
                                   const existingShow = dayShowtimes.find(s => {
                                     const [sh] = s.show_time.split(':').map(Number)
                                     return sh === hour
                                   })
                                   const timeStr = `${String(hour).padStart(2, '0')}:00`
                                   const isSelected = newShowtime.show_time === timeStr
-                                  const isClickable = selectedMovie && !blocked && !existingShow
+                                  
+                                  const showTitle = existingShow?.movie_title || ''
+                                  const showTime = existingShow?.show_time || ''
+                                  const showEndTime = existingShow?.end_time_display || ''
+                                  const showLabel = showTitle ? `${showTitle.slice(0, 8)} ${showTime}-${showEndTime}` : ''
                                   
                                   return (
                                     <button
                                       key={hour}
-                                      disabled={!isClickable}
-                                      onClick={() => isClickable && setNewShowtime({...newShowtime, show_time: timeStr})}
+                                      disabled={!!existingShow}
+                                      onClick={() => !existingShow && setNewShowtime({...newShowtime, show_time: timeStr})}
                                       className={`text-xs p-2 rounded text-center transition-all ${
                                         isSelected 
                                           ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background' 
-                                          : blocked && selectedMovie 
-                                            ? 'bg-orange-500/30 text-orange-500/50 border border-orange-500/30 cursor-not-allowed' 
-                                            : existingShow 
-                                              ? 'bg-red-500/20 text-red-500 cursor-not-allowed' 
-                                              : 'bg-green-500/20 text-green-600 hover:bg-green-500/30 cursor-pointer'
+                                          : existingShow 
+                                            ? 'bg-red-500/20 text-red-500 cursor-not-allowed' 
+                                            : 'bg-green-500/20 text-green-600 hover:bg-green-500/30 cursor-pointer'
                                       }`}
                                     >
                                       <div className="font-bold">{String(hour).padStart(2, '0')}:00</div>
-                                      <div className="text-[10px] opacity-70">
-                                        {isSelected ? 'Seleccionado' :
-                                         blocked && selectedMovie ? `Choca` : 
-                                         existingShow ? existingShow.movie_title?.slice(0, 8) : 'Libre'}
+                                      <div className="text-[9px] opacity-70 leading-tight">
+                                        {isSelected ? '✓' : existingShow ? showLabel : 'Libre'}
                                       </div>
                                     </button>
                                   )
@@ -1313,16 +1280,12 @@ export default function AdminPage() {
                               </div>
                               <div className="flex items-center justify-center gap-4 mt-2 text-xs">
                                 <div className="flex items-center gap-1">
-                                  <div className="w-3 h-3 rounded bg-red-500/20"></div>
-                                  <span className="text-muted-foreground">Ocupado</span>
-                                </div>
-                                <div className="flex items-center gap-1">
                                   <div className="w-3 h-3 rounded bg-green-500/20"></div>
                                   <span className="text-muted-foreground">Libre</span>
                                 </div>
                                 <div className="flex items-center gap-1">
-                                  <div className="w-3 h-3 rounded bg-orange-500/30"></div>
-                                  <span className="text-muted-foreground">No cabe</span>
+                                  <div className="w-3 h-3 rounded bg-red-500/20"></div>
+                                  <span className="text-muted-foreground">Ocupado</span>
                                 </div>
                               </div>
                             </div>
@@ -1331,20 +1294,30 @@ export default function AdminPage() {
                       </div>
                     )}
 
-                    <div className={`border rounded-lg p-3 text-center ${newShowtime.show_time ? 'bg-primary/10 border-primary/30' : 'bg-muted/30 border-border'}`}>
-                      {newShowtime.show_time ? (
-                        <div className="flex items-center justify-center gap-2">
-                          <Clock className="h-4 w-4 text-primary" />
-                          <span className="font-semibold text-primary">{newShowtime.show_time}</span>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">Selecciona un horario disponible</span>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Hora de la función</Label>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          type="time" 
+                          className="border-border bg-input"
+                          value={newShowtime.show_time}
+                          onChange={(e) => setNewShowtime({...newShowtime, show_time: e.target.value})}
+                          min="10:00"
+                          max="22:00"
+                          step="1800"
+                        />
+                      </div>
+                      {newShowtime.show_time && (
+                        <p className="text-xs text-muted-foreground">
+                          Hora seleccionada: <span className="font-semibold text-primary">{newShowtime.show_time}</span>
+                        </p>
                       )}
                     </div>
 
                     <Input 
                       type="number" 
-                      placeholder="Precio" 
+                      placeholder="Precio (USD)" 
                       className="border-border bg-input"
                       value={newShowtime.price}
                       onChange={(e) => setNewShowtime({...newShowtime, price: e.target.value})}
@@ -1458,22 +1431,22 @@ export default function AdminPage() {
                         value={editShowtime.show_date}
                         onChange={(e) => setEditShowtime({...editShowtime, show_date: e.target.value})}
                       />
-                      <Select value={editShowtime.show_time} onValueChange={(v) => setEditShowtime({...editShowtime, show_time: v})}>
-                        <SelectTrigger className="border-border bg-input">
-                          <SelectValue placeholder="Hora" />
-                        </SelectTrigger>
-                        <SelectContent className="border-border bg-card">
-                          {timeOptions.map((t) => (
-                            <SelectItem key={t.value} value={t.value}>
-                              {t.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          type="time" 
+                          className="border-border bg-input"
+                          value={editShowtime.show_time}
+                          onChange={(e) => setEditShowtime({...editShowtime, show_time: e.target.value})}
+                          min="10:00"
+                          max="22:00"
+                          step="1800"
+                        />
+                      </div>
                     </div>
                     <Input 
                       type="number" 
-                      placeholder="Precio" 
+                      placeholder="Precio (USD)" 
                       className="border-border bg-input"
                       value={editShowtime.price}
                       onChange={(e) => setEditShowtime({...editShowtime, price: Number(e.target.value)})}
