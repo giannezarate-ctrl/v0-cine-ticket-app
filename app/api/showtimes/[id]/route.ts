@@ -1,6 +1,17 @@
 import { sql } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
+function timeToMinutes(hora: string): number {
+  const [h, m] = hora.split(':').map(Number)
+  return h * 60 + m
+}
+
+function minutesToTime(minutos: number): string {
+  const h = Math.floor(minutos / 60)
+  const m = minutos % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -71,13 +82,103 @@ export async function PUT(
       return NextResponse.json({ error: 'Faltan datos requeridos (fecha, hora o precio)' }, { status: 400 })
     }
 
-    const start_time = new Date(`${show_date}T${show_time}`).toISOString()
+    const showtimeResult = await sql`
+      SELECT s.*, m.duration as movie_duration
+      FROM showtimes s
+      JOIN movies m ON s.movie_id = m.id
+      WHERE s.id = ${id}
+    `
+
+    if (showtimeResult.length === 0) {
+      return NextResponse.json({ error: 'Función no encontrada' }, { status: 404 })
+    }
+
+    const showtime = showtimeResult[0]
+    const roomIdText = showtime.room_id.toString()
+    const durationMinutes = showtime.movie_duration || 120
+
+    // Validar horario de operación (10:00 - 23:00)
+    const HORA_APERTURA = timeToMinutes('10:00')
+    const HORA_CIERRE = timeToMinutes('23:00')
+    const MARGEN_LIMPIEZA = 15
+
+    const nuevaInicio = timeToMinutes(show_time)
+    const nuevaFin = nuevaInicio + durationMinutes + MARGEN_LIMPIEZA
+
+    if (nuevaInicio < HORA_APERTURA) {
+      return NextResponse.json({
+        error: `Fuera de horario. El cine abre a las 10:00. Intentaste programar a las ${show_time}.`
+      }, { status: 400 })
+    }
+
+    if (nuevaFin > HORA_CIERRE) {
+      const horaFinReal = minutesToTime(nuevaInicio + durationMinutes)
+      return NextResponse.json({
+        error: `Fuera de horario. La función terminaría a las ${horaFinReal} (limpieza hasta ${minutesToTime(nuevaFin)}), pero el cine cierra a las 23:00.`
+      }, { status: 400 })
+    }
+
+    const endTimeFormatted = minutesToTime(nuevaInicio + durationMinutes)
+
+    const conflictCheck = await sql`
+      SELECT s.id, m.title as movie_title, r.name as room_name,
+             EXTRACT(HOUR FROM s.start_time AT TIME ZONE 'America/Bogota') * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE 'America/Bogota') as existe_inicio,
+             EXTRACT(HOUR FROM s.end_time AT TIME ZONE 'America/Bogota') * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE 'America/Bogota') as existe_fin
+      FROM showtimes s
+      JOIN movies m ON s.movie_id = m.id
+      JOIN rooms r ON s.room_id = r.id
+      WHERE s.room_id::text = ${roomIdText}
+        AND s.id != ${id}
+        AND DATE(s.start_time AT TIME ZONE 'America/Bogota') = ${show_date}::date
+    `
+
+    for (const func of conflictCheck) {
+      const existeInicio = Number(func.existe_inicio)
+      const existeFin = Number(func.existe_fin)
+      const peliculaExistente = func.movie_title
+
+      // Verificar solapamiento considerando margen de limpieza
+      if (nuevaInicio < existeFin && nuevaFin > existeInicio) {
+        let tipoConflicto = ""
+        
+        if (nuevaInicio >= existeInicio && nuevaFin <= existeFin) {
+          tipoConflicto = `tu función estaría DENTRO del horario de "${peliculaExistente}"`
+        } else if (nuevaInicio <= existeInicio && nuevaFin >= existeFin) {
+          tipoConflicto = `tu función cubriría completamente a "${peliculaExistente}"`
+        } else if (nuevaInicio < existeInicio && nuevaFin > existeInicio && nuevaFin <= existeFin) {
+          tipoConflicto = `tu función terminaría durante "${peliculaExistente}"`
+        } else if (nuevaInicio >= existeInicio && nuevaInicio < existeFin && nuevaFin > existeFin) {
+          tipoConflicto = `tu función empezaría durante "${peliculaExistente}"`
+        } else {
+          tipoConflicto = `hay solapamiento con "${peliculaExistente}"`
+        }
+        
+        const showtimeResult = await sql`
+          SELECT m.title FROM showtimes s JOIN movies m ON s.movie_id = m.id WHERE s.id = ${id}
+        `
+        const movieTitle = showtimeResult[0]?.title || 'Película'
+        
+        return NextResponse.json({
+          error: `❌ Conflicto de horario: ${tipoConflicto}.\n\n` +
+                 `📽️ Función existente: "${peliculaExistente}"\n` +
+                 `   Horario: ${minutesToTime(existeInicio)} - ${minutesToTime(existeFin)}\n\n` +
+                 `🎬 Tu función: "${movieTitle}"\n` +
+                 `   Horario: ${show_time} - ${endTimeFormatted}\n` +
+                 `   (Incluye ${MARGEN_LIMPIEZA} min de limpieza: hasta ${minutesToTime(nuevaFin)})`
+        }, { status: 409 })
+      }
+    }
+
+    const startDateTime = `${show_date} ${show_time}:00`
+    const endDateTime = `${show_date} ${endTimeFormatted}:00`
 
     const result = await sql`
       UPDATE showtimes 
-      SET start_time = ${start_time}, price = ${price}
+      SET start_time = ${startDateTime}::timestamp at time zone 'America/Bogota', 
+          end_time = ${endDateTime}::timestamp at time zone 'America/Bogota',
+          price = ${price}
       WHERE id = ${id}
-      RETURNING id, start_time, price
+      RETURNING id, start_time, end_time, price
     `
 
     if (result.length === 0) {

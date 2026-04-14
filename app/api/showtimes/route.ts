@@ -14,16 +14,30 @@ function formatTimeLocal(dt: Date) {
   return `${h}:${m}`
 }
 
+function timeToMinutes(hora: string): number {
+  const [h, m] = hora.split(':').map(Number)
+  return h * 60 + m
+}
+
+function minutesToTime(minutos: number): string {
+  const h = Math.floor(minutos / 60)
+  const m = minutos % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
 export async function GET(request: Request) {
   try {
-
     const { searchParams } = new URL(request.url)
     const movieId = searchParams.get('movieId')
     let showtimes
 
     if (movieId) {
       showtimes = await sql`
-        SELECT s.*, m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity,
+        SELECT s.id, s.movie_id, s.room_id, s.price, s.created_at,
+               TO_CHAR(s.start_time AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') as show_date,
+               TO_CHAR(s.start_time AT TIME ZONE 'America/Bogota', 'HH24:MI') as show_time,
+               TO_CHAR(s.end_time AT TIME ZONE 'America/Bogota', 'HH24:MI') as end_time_display,
+               m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity,
         COALESCE((
           SELECT COUNT(*) 
           FROM showtime_seats ss 
@@ -37,7 +51,11 @@ export async function GET(request: Request) {
       `
     } else {
       showtimes = await sql`
-        SELECT s.*, m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity,
+        SELECT s.id, s.movie_id, s.room_id, s.price, s.created_at,
+               TO_CHAR(s.start_time AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') as show_date,
+               TO_CHAR(s.start_time AT TIME ZONE 'America/Bogota', 'HH24:MI') as show_time,
+               TO_CHAR(s.end_time AT TIME ZONE 'America/Bogota', 'HH24:MI') as end_time_display,
+               m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity,
         COALESCE((
           SELECT COUNT(*) 
           FROM showtime_seats ss 
@@ -50,18 +68,11 @@ export async function GET(request: Request) {
       `
     }
 
-    const mapped = showtimes.map((s: any) => {
-      const dt = s.start_time ? new Date(s.start_time) : null
-      const et = s.end_time ? new Date(s.end_time) : null
-      return {
-        ...s,
-        show_date: dt ? formatDateLocal(dt) : null,
-        show_time: dt ? formatTimeLocal(dt) : null,
-        end_time_display: et ? formatTimeLocal(et) : null,
-        rows_count: 10,
-        seats_per_row: Math.ceil((s.capacity || 0) / 10)
-      }
-    })
+    const mapped = showtimes.map((s: any) => ({
+      ...s,
+      rows_count: 10,
+      seats_per_row: Math.ceil((s.capacity || 0) / 10)
+    }))
 
     return NextResponse.json(mapped)
 
@@ -75,8 +86,6 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const { movie_id, room_id, show_date, show_time, price } = body
-
-    console.log('POST showtime - movie:', movie_id, 'room:', room_id, 'date:', show_date, 'time:', show_time)
 
     if (!movie_id || !room_id || !show_date || !show_time) {
       return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 })
@@ -93,63 +102,116 @@ export async function POST(request: Request) {
     const movie = movieResult[0]
     const durationMinutes = movie.duration || 120
 
-    const [h, m] = show_time.split(':').map(Number)
-    const totalMinutes = h * 60 + m + durationMinutes
-    const endH = Math.floor(totalMinutes / 60)
-    const endM = totalMinutes % 60
-    const endTimeStr = `${show_date} ${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00`
-
-    const startTimeStr = `${show_date} ${show_time}:00`
+    // Validar horario de operación (10:00 - 23:00)
+    const HORA_APERTURA = timeToMinutes('10:00')
+    const HORA_CIERRE = timeToMinutes('23:00')
+    const MARGEN_LIMPIEZA = 15
+    
+    const nuevaInicio = timeToMinutes(show_time)
+    const nuevaFin = nuevaInicio + durationMinutes + MARGEN_LIMPIEZA
+    
+    if (nuevaInicio < HORA_APERTURA) {
+      return NextResponse.json({ 
+        error: `Fuera de horario. El cine abre a las 10:00. Intentaste programar a las ${show_time}.` 
+      }, { status: 400 })
+    }
+    
+    if (nuevaFin > HORA_CIERRE) {
+      const horaFinReal = minutesToTime(nuevaInicio + durationMinutes)
+      return NextResponse.json({ 
+        error: `Fuera de horario. La función terminaría a las ${horaFinReal} (limpieza hasta ${minutesToTime(nuevaFin)}), pero el cine cierra a las 23:00.` 
+      }, { status: 400 })
+    }
 
     const conflictCheck = await sql`
-      SELECT s.id, s.start_time, s.end_time, m.title as movie_title, r.name as room_name, r.id as room_id
+      SELECT s.id, 
+             m.title as movie_title, 
+             r.name as room_name,
+             EXTRACT(HOUR FROM s.start_time AT TIME ZONE 'America/Bogota') * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE 'America/Bogota') as existe_inicio,
+             EXTRACT(HOUR FROM s.end_time AT TIME ZONE 'America/Bogota') * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE 'America/Bogota') as existe_fin
       FROM showtimes s
       JOIN movies m ON s.movie_id = m.id
       JOIN rooms r ON s.room_id = r.id
       WHERE s.room_id::text = ${room_id}
-        AND s.end_time > ${startTimeStr}::timestamp
-        AND ${endTimeStr}::timestamp > s.start_time
+        AND DATE(s.start_time AT TIME ZONE 'America/Bogota') = ${show_date}::date
     `
 
-    console.log('DEBUG POST showtime - movie_id:', movie_id, 'room_id:', room_id)
-    console.log('DEBUG - start:', startTimeStr, 'end:', endTimeStr)
-    console.log('DEBUG - conflictos encontrados:', conflictCheck?.length || 0)
-    console.log('DEBUG - conflictos:', JSON.stringify(conflictCheck))
-
-    if (conflictCheck && conflictCheck.length > 0) {
-      const conflict = conflictCheck[0]
-      const cStart = new Date(conflict.start_time)
-      const cEnd = new Date(conflict.end_time)
+    for (const func of conflictCheck) {
+      const existeInicio = Number(func.existe_inicio)
+      const existeFin = Number(func.existe_fin)
+      const peliculaExistente = func.movie_title
       
-      return NextResponse.json({ 
-        error: `La sala está ocupada. La película "${conflict.movie_title}" está programada en ${conflict.room_name} de ${formatTimeLocal(cStart)} a ${formatTimeLocal(cEnd)}`
-      }, { status: 409 })
+      // Verificar solapamiento: nueva empieza antes de que termine la existente
+      // Y nueva termina después de que empieza la existente
+      if (nuevaInicio < existeFin && nuevaFin > existeInicio) {
+        let tipoConflicto = ""
+        
+        if (nuevaInicio >= existeInicio && nuevaFin <= existeFin) {
+          // Caso 1: Nueva función está completamente DENTRO de la existente
+          tipoConflicto = `tu función estaría DENTRO del horario de "${peliculaExistente}"`
+        } else if (nuevaInicio <= existeInicio && nuevaFin >= existeFin) {
+          // Caso 2: Nueva función CONTIENE completamente a la existente
+          tipoConflicto = `tu función cubriría completamente a "${peliculaExistente}"`
+        } else if (nuevaInicio < existeInicio && nuevaFin > existeInicio && nuevaFin <= existeFin) {
+          // Caso 3: Nueva función empieza antes pero termina dentro (solapa el inicio)
+          tipoConflicto = `tu función terminaría durante "${peliculaExistente}"`
+        } else if (nuevaInicio >= existeInicio && nuevaInicio < existeFin && nuevaFin > existeFin) {
+          // Caso 4: Nueva función empieza dentro pero termina después (solapa el final)
+          tipoConflicto = `tu función empezaría durante "${peliculaExistente}"`
+        } else {
+          tipoConflicto = `hay solapamiento con "${peliculaExistente}"`
+        }
+        
+        return NextResponse.json({ 
+          error: `❌ Conflicto de horario: ${tipoConflicto}.\n\n` +
+                 `📽️ Función existente: "${peliculaExistente}"\n` +
+                 `   Horario: ${minutesToTime(existeInicio)} - ${minutesToTime(existeFin)}\n\n` +
+                 `🎬 Tu función: "${movie.title}"\n` +
+                 `   Horario: ${show_time} - ${minutesToTime(nuevaInicio + durationMinutes)}\n` +
+                 `   (Incluye ${MARGEN_LIMPIEZA} min de limpieza: hasta ${minutesToTime(nuevaFin)})`
+        }, { status: 409 })
+      }
     }
 
     const movieConflictCheck = await sql`
-      SELECT s.id, s.start_time, s.end_time, m.title as movie_title, r.name as room_name
+      SELECT s.id, 
+             m.title as movie_title, 
+             r.name as room_name,
+             EXTRACT(HOUR FROM s.start_time AT TIME ZONE 'America/Bogota') * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE 'America/Bogota') as existe_inicio,
+             EXTRACT(HOUR FROM s.end_time AT TIME ZONE 'America/Bogota') * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE 'America/Bogota') as existe_fin
       FROM showtimes s
       JOIN movies m ON s.movie_id = m.id
       JOIN rooms r ON s.room_id = r.id
       WHERE s.movie_id::text = ${movie_id}
         AND s.room_id::text = ${room_id}
-        AND s.end_time > ${startTimeStr}::timestamp
-        AND ${endTimeStr}::timestamp > s.start_time
+        AND DATE(s.start_time AT TIME ZONE 'America/Bogota') = ${show_date}::date
     `
 
-    if (movieConflictCheck && movieConflictCheck.length > 0) {
-      const conflict = movieConflictCheck[0]
-      const cStart = new Date(conflict.start_time)
-      const cEnd = new Date(conflict.end_time)
-      return NextResponse.json({ 
-        error: `La película "${movie.title}" ya está programada en ${conflict.room_name} de ${formatTimeLocal(cStart)} a ${formatTimeLocal(cEnd)}` 
-      }, { status: 409 })
+    for (const func of movieConflictCheck) {
+      const existeInicio = Number(func.existe_inicio)
+      const existeFin = Number(func.existe_fin)
+      
+      if (nuevaInicio < existeFin && nuevaFin > existeInicio) {
+        return NextResponse.json({ 
+          error: `La película "${movie.title}" ya está programada en ${func.room_name} de ${minutesToTime(existeInicio)} a ${minutesToTime(existeFin)}` 
+        }, { status: 409 })
+      }
     }
 
+    const endTimeFormatted = minutesToTime(nuevaFin)
+    const startDateTime = `${show_date} ${show_time}:00`
+    const endDateTime = `${show_date} ${endTimeFormatted}:00`
+    
     const result = await sql`
       INSERT INTO showtimes (movie_id, room_id, start_time, end_time, price)
-      VALUES (${movie_id}::uuid, ${room_id}::uuid, ${startTimeStr}::timestamp, ${endTimeStr}::timestamp, ${price})
-      RETURNING id, movie_id, room_id, start_time, end_time, price, created_at
+      VALUES (
+        ${movie_id}::uuid, 
+        ${room_id}::uuid, 
+        ${startDateTime}::timestamp at time zone 'America/Bogota', 
+        ${endDateTime}::timestamp at time zone 'America/Bogota', 
+        ${price}
+      )
+      RETURNING id, movie_id, room_id, start_time AT TIME ZONE 'America/Bogota' as start_time_local, end_time AT TIME ZONE 'America/Bogota' as end_time_local, price, created_at
     `
 
     const showtimeId = result[0].id
@@ -162,16 +224,12 @@ export async function POST(request: Request) {
     `
 
     const created = result[0]
-    const createdDt = created?.start_time ? new Date(created.start_time) : null
-    const createdEt = created?.end_time ? new Date(created.end_time) : null
-    const payload = created ? {
+    return NextResponse.json({
       ...created,
-      show_date: createdDt ? formatDateLocal(createdDt) : null,
-      show_time: createdDt ? formatTimeLocal(createdDt) : null,
-      end_time_display: createdEt ? formatTimeLocal(createdEt) : null
-    } : created
-
-    return NextResponse.json(payload, { status: 201 })
+      show_date: show_date,
+      show_time: show_time,
+      end_time_display: endTimeFormatted
+    }, { status: 201 })
   } catch (error) {
     console.error('Error creating showtime:', error)
     return NextResponse.json({ error: 'Error creating showtime' }, { status: 500 })

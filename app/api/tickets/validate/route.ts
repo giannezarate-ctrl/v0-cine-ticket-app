@@ -15,14 +15,14 @@ export async function POST(request: Request) {
     
     console.log('[VALIDATE] Cleaned code:', ticket_code)
     
-    // Try searching with TKT- prefix
     let searchCode = 'TKT-' + ticket_code
     
     const tickets = await sql`
       SELECT 
         t.*, 
         m.title as movie_title, 
-        s.start_time, 
+        s.start_time,
+        s.end_time,
         r.name as room_name,
         u.name as customer_name,
         u.email as customer_email,
@@ -35,15 +35,6 @@ export async function POST(request: Request) {
       WHERE t.code = ${searchCode}
     `
     
-    // If not found, show what codes exist in DB
-    if (tickets.length === 0) {
-      const allTickets = await sql`SELECT code FROM tickets LIMIT 10`
-      console.log('[VALIDATE] Codes in DB:', allTickets.map((t: any) => t.code))
-    }
-    
-    console.log('[VALIDATE] Searching with code:', searchCode)
-    console.log('[VALIDATE] Tickets found:', tickets.length)
-    
     if (tickets.length === 0) {
       return NextResponse.json(
         { valid: false, error: 'Código de tiquete no encontrado' },
@@ -53,7 +44,39 @@ export async function POST(request: Request) {
     
     const ticket = tickets[0]
     
-    const dt = ticket.start_time ? new Date(ticket.start_time) : null
+    const now = new Date()
+    
+    const startTime = ticket.start_time ? new Date(ticket.start_time + ' UTC') : null
+    const endTime = ticket.end_time ? new Date(ticket.end_time + ' UTC') : null
+    
+    const tenMinutesBefore = startTime ? new Date(startTime.getTime() - 10 * 60 * 1000) : null
+    
+    const canValidate = startTime && endTime && now >= tenMinutesBefore && now <= endTime
+    
+    if (!canValidate) {
+      let timeError = ''
+      
+      if (now < tenMinutesBefore!) {
+        const waitMinutes = Math.ceil((tenMinutesBefore!.getTime() - now.getTime()) / 60000)
+        timeError = `Es muy pronto para validar. La función inicia a las ${startTime.toTimeString().slice(0, 5)}. Debes esperar ${waitMinutes} minuto(s).`
+      } else {
+        timeError = `La función ya terminó. Esta función terminó a las ${endTime.toTimeString().slice(0, 5)}.`
+      }
+      
+      return NextResponse.json({
+        valid: false,
+        error: timeError,
+        ticket: {
+          ...ticket,
+          show_date: startTime ? startTime.toISOString().split('T')[0] : null,
+          show_time: startTime ? startTime.toTimeString().slice(0, 5) : null,
+          seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
+          seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
+        }
+      }, { status: 400 })
+    }
+    
+    const dt = startTime
     const formattedTicket = {
       ...ticket,
       show_date: dt ? dt.toISOString().split('T')[0] : null,

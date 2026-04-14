@@ -51,7 +51,9 @@ import {
   RefreshCw,
   LogOut,
   LogIn,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 
 interface Stats {
@@ -84,11 +86,63 @@ export default function AdminPage() {
     movie_id: '', room_id: '', show_date: '', show_time: '', price: ''
   })
   const [showtimeError, setShowtimeError] = useState<string | null>(null)
+  const [calendarMonth, setCalendarMonth] = useState(new Date())
+  const [selectedRoomForCalendar, setSelectedRoomForCalendar] = useState<string>('')
 
   const timeOptions = Array.from({ length: 14 }, (_, i) => {
     const hour = (10 + i).toString().padStart(2, '0')
     return { value: `${hour}:00`, label: `${hour}:00` }
   })
+
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const daysInMonth = lastDay.getDate()
+    const startingDay = firstDay.getDay()
+    
+    const days: (number | null)[] = []
+    for (let i = 0; i < startingDay; i++) days.push(null)
+    for (let i = 1; i <= daysInMonth; i++) days.push(i)
+    return days
+  }
+
+  const getShowtimesForDay = (dateStr: string) => {
+    if (!selectedRoomForCalendar) return []
+    return showtimes.filter(s => s.room_id === selectedRoomForCalendar && s.show_date === dateStr)
+  }
+
+  const hasShowtimes = (dateStr: string) => getShowtimesForDay(dateStr).length > 0
+
+  const formatTime = (time: string) => time
+
+  const checkTimeSlotBlocked = (startHour: number, duration: number, existingShowtimes: any[]): { blocked: boolean; conflictingMovie?: string } => {
+    if (!existingShowtimes || existingShowtimes.length === 0) return { blocked: false }
+    
+    const startMinutes = startHour * 60
+    const endMinutes = startMinutes + duration
+    
+    for (const show of existingShowtimes) {
+      const [sh, sm = 0] = show.show_time.split(':').map(Number)
+      const existStart = sh * 60 + sm
+      const existMovie = movies.find(m => m.id === show.movie_id)
+      const existDuration = existMovie?.duration || 120
+      const existEnd = existStart + existDuration
+      
+      if (startMinutes < existEnd && endMinutes > existStart) {
+        return { blocked: true, conflictingMovie: existMovie?.title || 'Otra' }
+      }
+    }
+    return { blocked: false }
+  }
+
+  const getDateStr = (day: number) => {
+    const year = calendarMonth.getFullYear()
+    const month = String(calendarMonth.getMonth() + 1).padStart(2, '0')
+    const dayStr = String(day).padStart(2, '0')
+    return `${year}-${month}-${dayStr}`
+  }
   const [movieDialogOpen, setMovieDialogOpen] = useState(false)
   const [showtimeDialogOpen, setShowtimeDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -283,7 +337,31 @@ export default function AdminPage() {
 
   const handleAddShowtime = async () => {
     setSaving(true)
+    setShowtimeError(null)
     try {
+      if (!newShowtime.movie_id || !newShowtime.room_id || !newShowtime.show_date || !newShowtime.show_time) {
+        setShowtimeError('Todos los campos son obligatorios')
+        setSaving(false)
+        return
+      }
+
+      const movie = movies.find(m => m.id === newShowtime.movie_id)
+      const existingInRoomAndDate = showtimes.filter(s => 
+        s.room_id === newShowtime.room_id && 
+        s.show_date === newShowtime.show_date
+      )
+
+      if (movie) {
+        const [hh, mm = 0] = newShowtime.show_time.split(':').map(Number)
+        const startHour = hh + (mm / 60)
+        const check = checkTimeSlotBlocked(startHour, movie.duration || 120, existingInRoomAndDate)
+        if (check.blocked) {
+          setShowtimeError(`La función se cruza con otra película programada (${check.conflictingMovie}).`)
+          setSaving(false)
+          return
+        }
+      }
+
       const res = await fetch('/api/showtimes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -444,6 +522,28 @@ export default function AdminPage() {
     if (!editShowtime) return
     setSaving(true)
     try {
+      const movie = movies.find(m => m.id === editShowtime.movie_id)
+      const existingInRoomAndDate = showtimes.filter(s => 
+        s.room_id === editShowtime.room_id && 
+        s.show_date === editShowtime.show_date &&
+        s.id !== editShowtime.id
+      )
+
+      if (movie) {
+        const [hh, mm = 0] = editShowtime.show_time.split(':').map(Number)
+        const startHour = hh + (mm / 60)
+        const check = checkTimeSlotBlocked(startHour, movie.duration || 120, existingInRoomAndDate)
+        if (check.blocked) {
+          toast({
+            variant: 'destructive',
+            title: 'Cruce de horarios',
+            description: `La función se cruza con otra película programada (${check.conflictingMovie}).`
+          })
+          setSaving(false)
+          return
+        }
+      }
+
       const res = await fetch(`/api/showtimes/${editShowtime.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1071,7 +1171,7 @@ export default function AdminPage() {
                     Nueva Función
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="border-border bg-card">
+                <DialogContent className="border-border bg-card max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle className="text-foreground">Programar Nueva Función</DialogTitle>
                     <DialogDescription>
@@ -1091,7 +1191,7 @@ export default function AdminPage() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Select value={newShowtime.room_id} onValueChange={(v) => setNewShowtime({...newShowtime, room_id: v})}>
+                    <Select value={newShowtime.room_id} onValueChange={(v) => { setNewShowtime({...newShowtime, room_id: v}); setSelectedRoomForCalendar(v); }}>
                       <SelectTrigger className="border-border bg-input">
                         <SelectValue placeholder="Sala" />
                       </SelectTrigger>
@@ -1103,26 +1203,146 @@ export default function AdminPage() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <div className="grid grid-cols-2 gap-4">
-                      <Input 
-                        type="date" 
-                        className="border-border bg-input"
-                        value={newShowtime.show_date}
-                        onChange={(e) => setNewShowtime({...newShowtime, show_date: e.target.value})}
-                      />
-                      <Select value={newShowtime.show_time} onValueChange={(v) => setNewShowtime({...newShowtime, show_time: v})}>
-                        <SelectTrigger className="border-border bg-input">
-                          <SelectValue placeholder="Hora" />
-                        </SelectTrigger>
-                        <SelectContent className="border-border bg-card">
-                          {timeOptions.map((t) => (
-                            <SelectItem key={t.value} value={t.value}>
-                              {t.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    
+                    {/* Calendario Visual */}
+                    <div className="border border-border rounded-lg p-4 bg-input/30">
+                      <div className="flex items-center justify-between mb-4">
+                        <Button variant="ghost" size="sm" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1))}>
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="font-semibold text-foreground">
+                          {calendarMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
+                        </span>
+                        <Button variant="ghost" size="sm" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1))}>
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                        {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => (
+                          <div key={d} className="text-xs text-muted-foreground font-medium">{d}</div>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-7 gap-1">
+                        {getDaysInMonth(calendarMonth).map((day, idx) => {
+                          if (!day) return <div key={`empty-${idx}`} />
+                          const dateStr = getDateStr(day)
+                          const isSelected = newShowtime.show_date === dateStr
+                          const hasFunc = hasShowtimes(dateStr)
+                          return (
+                            <button
+                              key={day}
+                              onClick={() => setNewShowtime({...newShowtime, show_date: dateStr})}
+                              className={`h-8 w-8 rounded-full text-sm flex items-center justify-center transition-all
+                                ${isSelected ? 'bg-primary text-primary-foreground font-bold' : ''}
+                                ${!isSelected && hasFunc ? 'bg-red-500/80 text-white font-medium' : ''}
+                                ${!isSelected && !hasFunc ? 'bg-muted text-muted-foreground hover:bg-muted/80' : ''}
+                              `}
+                            >
+                              {day}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div className="flex items-center justify-center gap-4 mt-3 text-xs">
+                        <div className="flex items-center gap-1">
+                          <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+                          <span className="text-muted-foreground">Con funciones</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-3 h-3 rounded-full bg-muted"></div>
+                          <span className="text-muted-foreground">Sin funciones</span>
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Horarios del día seleccionado */}
+                    {newShowtime.show_date && newShowtime.room_id && (
+                      <div className="border border-border rounded-lg p-4 bg-input/30">
+                        <h4 className="text-sm font-semibold text-foreground mb-3">
+                          Horarios del {newShowtime.show_date.split('-')[2]} de {calendarMonth.toLocaleDateString('es-ES', { month: 'long' })}
+                        </h4>
+                        {(() => {
+                          const dayShowtimes = getShowtimesForDay(newShowtime.show_date)
+                          const selectedMovie = movies.find(m => m.id === newShowtime.movie_id)
+                          const selectedDuration = selectedMovie?.duration || 120
+                          const allSlots = Array.from({ length: 15 }, (_, i) => 10 + i)
+                          
+                          return (
+                            <div className="space-y-3">
+                              {selectedMovie && (
+                                <div className="text-xs text-muted-foreground bg-primary/10 p-2 rounded">
+                                  <span className="font-semibold">"{selectedMovie.title}"</span> ({selectedDuration} min)
+                                </div>
+                              )}
+                              <div className="grid grid-cols-5 gap-1">
+                                {allSlots.map(hour => {
+                                  const { blocked, conflictingMovie } = checkTimeSlotBlocked(hour, selectedDuration, dayShowtimes)
+                                  const existingShow = dayShowtimes.find(s => {
+                                    const [sh] = s.show_time.split(':').map(Number)
+                                    return sh === hour
+                                  })
+                                  
+                                  return (
+                                    <div
+                                      key={hour}
+                                      className={`text-xs p-2 rounded text-center transition-all ${
+                                        blocked && selectedMovie 
+                                          ? 'bg-orange-500/30 text-orange-500 border border-orange-500/50' 
+                                          : existingShow 
+                                            ? 'bg-red-500/20 text-red-500' 
+                                            : 'bg-green-500/20 text-green-500'
+                                      }`}
+                                    >
+                                      <div className="font-bold">{String(hour).padStart(2, '0')}:00</div>
+                                      <div className="text-[10px] opacity-70">
+                                        {blocked && selectedMovie ? `Choca con ${conflictingMovie?.slice(0, 6)}` : 
+                                         existingShow ? existingShow.movie_title?.slice(0, 8) : 'Libre'}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                              <div className="flex items-center justify-center gap-4 mt-2 text-xs">
+                                <div className="flex items-center gap-1">
+                                  <div className="w-3 h-3 rounded bg-red-500/20"></div>
+                                  <span className="text-muted-foreground">Ocupado</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <div className="w-3 h-3 rounded bg-green-500/20"></div>
+                                  <span className="text-muted-foreground">Libre</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <div className="w-3 h-3 rounded bg-orange-500/30"></div>
+                                  <span className="text-muted-foreground">No cabe</span>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    )}
+
+                    <Select value={newShowtime.show_time} onValueChange={(v) => setNewShowtime({...newShowtime, show_time: v})}>
+                      <SelectTrigger className="border-border bg-input">
+                        <SelectValue placeholder="Selecciona una hora" />
+                      </SelectTrigger>
+                      <SelectContent className="border-border bg-card">
+                        {timeOptions.map((t) => {
+                          const dayShowtimes = newShowtime.show_date && newShowtime.room_id ? getShowtimesForDay(newShowtime.show_date) : []
+                          const selectedMovie = movies.find(m => m.id === newShowtime.movie_id)
+                          const selectedDuration = selectedMovie?.duration || 120
+                          const [h] = t.value.split(':').map(Number)
+                          const { blocked, conflictingMovie } = checkTimeSlotBlocked(h, selectedDuration, dayShowtimes)
+                          
+                          return (
+                            <SelectItem key={t.value} value={t.value} disabled={blocked}>
+                              {t.label} {blocked ? `- No cabe (choca con ${conflictingMovie?.slice(0, 10)})` : ''}
+                            </SelectItem>
+                          )
+                        })}
+                      </SelectContent>
+                    </Select>
+
                     <Input 
                       type="number" 
                       placeholder="Precio" 
