@@ -1,6 +1,26 @@
 import { sql } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
+function extractTimePart(timestampStr: string): string | null {
+  if (!timestampStr) return null
+  
+  const str = String(timestampStr)
+  
+  if (str.includes('T')) {
+    const parts = str.split('T')
+    if (parts[1]) {
+      return parts[1].slice(0, 5)
+    }
+  }
+  
+  const spaceParts = str.split(' ')
+  if (spaceParts[1]) {
+    return spaceParts[1].slice(0, 5)
+  }
+  
+  return null
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json()
@@ -44,18 +64,25 @@ export async function POST(request: Request) {
     
     const ticket = tickets[0]
     
+    console.log('[VALIDATE] start_time raw:', ticket.start_time)
+    console.log('[VALIDATE] end_time raw:', ticket.end_time)
+    
     const now = new Date()
     const nowMinutes = now.getHours() * 60 + now.getMinutes()
     
-    const startTimeRaw = String(ticket.start_time)
-    const endTimeRaw = String(ticket.end_time)
+    const startTimePart = extractTimePart(ticket.start_time)
+    const endTimePart = extractTimePart(ticket.end_time)
     
-    const startTimePart = startTimeRaw.split(' ')[1]?.slice(0, 5) || startTimeRaw.slice(11, 16)
-    const endTimePart = endTimeRaw.split(' ')[1]?.slice(0, 5) || endTimeRaw.slice(11, 16)
-    
-    console.log('[VALIDATE] startTimeRaw:', startTimeRaw, 'startTimePart:', startTimePart)
-    console.log('[VALIDATE] endTimeRaw:', endTimeRaw, 'endTimePart:', endTimePart)
+    console.log('[VALIDATE] startTimePart:', startTimePart)
+    console.log('[VALIDATE] endTimePart:', endTimePart)
     console.log('[VALIDATE] nowMinutes:', nowMinutes)
+    
+    if (!startTimePart || !endTimePart) {
+      return NextResponse.json(
+        { valid: false, error: 'Error al procesar horarios de la función' },
+        { status: 500 }
+      )
+    }
     
     const [startHour, startMin] = startTimePart.split(':').map(Number)
     const [endHour, endMin] = endTimePart.split(':').map(Number)
@@ -82,7 +109,7 @@ export async function POST(request: Request) {
         error: timeError,
         ticket: {
           ...ticket,
-          show_date: startTimeRaw.split(' ')[0],
+          show_date: String(ticket.start_time).split(' ')[0],
           show_time: startTimePart,
           seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
           seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
@@ -92,7 +119,7 @@ export async function POST(request: Request) {
     
     const formattedTicket = {
       ...ticket,
-      show_date: startTimeRaw.split(' ')[0],
+      show_date: String(ticket.start_time).split(' ')[0],
       show_time: startTimePart,
       seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
       seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
