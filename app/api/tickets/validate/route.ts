@@ -1,25 +1,12 @@
 import { sql } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
-function extractTimeFromDateString(dateStr: string): { hours: number; minutes: number } | null {
-  if (!dateStr) return null
-  
-  const str = String(dateStr)
-  
-  const match = str.match(/(\d{1,2}):(\d{2}):(\d{2})/)
-  if (match) {
-    return { hours: parseInt(match[1]), minutes: parseInt(match[2]) }
-  }
-  
-  return null
+function getTimeMinutes(date: Date): number {
+  return date.getHours() * 60 + date.getMinutes()
 }
 
-function formatTimeFromDateString(dateStr: string): string | null {
-  const result = extractTimeFromDateString(dateStr)
-  if (result) {
-    return `${String(result.hours).padStart(2, '0')}:${String(result.minutes).padStart(2, '0')}`
-  }
-  return null
+function formatTime(date: Date): string {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
 export async function POST(request: Request) {
@@ -65,45 +52,39 @@ export async function POST(request: Request) {
     
     const ticket = tickets[0]
     
-    console.log('[VALIDATE] start_time:', ticket.start_time, typeof ticket.start_time)
-    console.log('[VALIDATE] end_time:', ticket.end_time, typeof ticket.end_time)
+    const startDate = new Date(ticket.start_time)
+    const endDate = new Date(ticket.end_time)
     
-    const now = new Date()
-    const nowMinutes = now.getHours() * 60 + now.getMinutes()
+    console.log('[VALIDATE] start_date:', startDate.toString())
+    console.log('[VALIDATE] end_date:', endDate.toString())
     
-    const startTime = extractTimeFromDateString(ticket.start_time)
-    const endTime = extractTimeFromDateString(ticket.end_time)
-    
-    console.log('[VALIDATE] startTime:', startTime)
-    console.log('[VALIDATE] endTime:', endTime)
-    console.log('[VALIDATE] nowMinutes:', nowMinutes)
-    
-    if (!startTime || !endTime) {
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      console.error('[VALIDATE] Invalid date:', ticket.start_time, ticket.end_time)
       return NextResponse.json(
         { valid: false, error: 'Error al procesar horarios de la función' },
         { status: 500 }
       )
     }
     
-    const startMinutes = startTime.hours * 60 + startTime.minutes
-    const endMinutes = endTime.hours * 60 + endTime.minutes
+    const now = new Date()
+    const nowMinutes = getTimeMinutes(now)
+    const startMinutes = getTimeMinutes(startDate)
+    const endMinutes = getTimeMinutes(endDate)
     const tenMinutesBefore = startMinutes - 10
     
-    console.log('[VALIDATE] startMinutes:', startMinutes, 'endMinutes:', endMinutes, 'tenMinutesBefore:', tenMinutesBefore)
+    console.log('[VALIDATE] nowMinutes:', nowMinutes)
+    console.log('[VALIDATE] startMinutes:', startMinutes, 'endMinutes:', endMinutes)
     
     const canValidate = nowMinutes >= tenMinutesBefore && nowMinutes <= endMinutes
     
     if (!canValidate) {
       let timeError = ''
       
-      const startTimeStr = formatTimeFromDateString(ticket.start_time)
-      const endTimeStr = formatTimeFromDateString(ticket.end_time)
-      
       if (nowMinutes < tenMinutesBefore) {
         const waitMinutes = tenMinutesBefore - nowMinutes
-        timeError = `Es muy pronto para validar. La función inicia a las ${startTimeStr}. Debes esperar ${waitMinutes} minuto(s).`
+        timeError = `Es muy pronto para validar. La función inicia a las ${formatTime(startDate)}. Debes esperar ${waitMinutes} minuto(s).`
       } else {
-        timeError = `La función ya terminó. Esta función terminó a las ${endTimeStr}.`
+        timeError = `La función ya terminó. Esta función terminó a las ${formatTime(endDate)}.`
       }
       
       return NextResponse.json({
@@ -111,8 +92,8 @@ export async function POST(request: Request) {
         error: timeError,
         ticket: {
           ...ticket,
-          show_date: String(ticket.start_time).split(' ')[0],
-          show_time: startTimeStr,
+          show_date: startDate.toISOString().split('T')[0],
+          show_time: formatTime(startDate),
           seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
           seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
         }
@@ -121,8 +102,8 @@ export async function POST(request: Request) {
     
     const formattedTicket = {
       ...ticket,
-      show_date: String(ticket.start_time).split(' ')[0],
-      show_time: formatTimeFromDateString(ticket.start_time),
+      show_date: startDate.toISOString().split('T')[0],
+      show_time: formatTime(startDate),
       seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
       seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
     }
