@@ -45,35 +45,13 @@ export async function POST(request: Request) {
     const ticket = tickets[0]
     
     const now = new Date()
-    const todayStr = now.toISOString().split('T')[0]
     const nowMinutes = now.getHours() * 60 + now.getMinutes()
     
     const startTimeStr = String(ticket.start_time)
     const endTimeStr = String(ticket.end_time)
     
-    const startDatePart = startTimeStr.split(' ')[0]
     const startTimePart = startTimeStr.split(' ')[1]?.slice(0, 5) || null
-    
     const endTimePart = endTimeStr.split(' ')[1]?.slice(0, 5) || null
-    
-    const showtimeDate = startDatePart
-    
-    if (showtimeDate !== todayStr) {
-      const isPast = showtimeDate < todayStr
-      return NextResponse.json({
-        valid: false,
-        error: isPast 
-          ? `Esta función fue el ${showtimeDate}. Ya no es válida.`
-          : `Esta función está programada para el ${showtimeDate}. Aún no puedes validar este tiquete.`,
-        ticket: {
-          ...ticket,
-          show_date: showtimeDate,
-          show_time: startTimePart,
-          seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
-          seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
-        }
-      }, { status: 400 })
-    }
     
     const [startHour, startMin] = (startTimePart || '00:00').split(':').map(Number)
     const [endHour, endMin] = (endTimePart || '00:00').split(':').map(Number)
@@ -98,7 +76,7 @@ export async function POST(request: Request) {
         error: timeError,
         ticket: {
           ...ticket,
-          show_date: showtimeDate,
+          show_date: startTimeStr.split(' ')[0],
           show_time: startTimePart,
           seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
           seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
@@ -108,7 +86,7 @@ export async function POST(request: Request) {
     
     const formattedTicket = {
       ...ticket,
-      show_date: showtimeDate,
+      show_date: startTimeStr.split(' ')[0],
       show_time: startTimePart,
       seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
       seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
