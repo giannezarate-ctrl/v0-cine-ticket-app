@@ -1281,24 +1281,32 @@ export default function AdminPage() {
                                     const [sh] = s.show_time.split(':').map(Number)
                                     return sh === hour
                                   })
+                                  const timeStr = `${String(hour).padStart(2, '0')}:00`
+                                  const isSelected = newShowtime.show_time === timeStr
+                                  const isClickable = selectedMovie && !blocked && !existingShow
                                   
                                   return (
-                                    <div
+                                    <button
                                       key={hour}
+                                      disabled={!isClickable}
+                                      onClick={() => isClickable && setNewShowtime({...newShowtime, show_time: timeStr})}
                                       className={`text-xs p-2 rounded text-center transition-all ${
-                                        blocked && selectedMovie 
-                                          ? 'bg-orange-500/30 text-orange-500 border border-orange-500/50' 
-                                          : existingShow 
-                                            ? 'bg-red-500/20 text-red-500' 
-                                            : 'bg-green-500/20 text-green-500'
+                                        isSelected 
+                                          ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background' 
+                                          : blocked && selectedMovie 
+                                            ? 'bg-orange-500/30 text-orange-500/50 border border-orange-500/30 cursor-not-allowed' 
+                                            : existingShow 
+                                              ? 'bg-red-500/20 text-red-500 cursor-not-allowed' 
+                                              : 'bg-green-500/20 text-green-600 hover:bg-green-500/30 cursor-pointer'
                                       }`}
                                     >
                                       <div className="font-bold">{String(hour).padStart(2, '0')}:00</div>
                                       <div className="text-[10px] opacity-70">
-                                        {blocked && selectedMovie ? `Choca con ${conflictingMovie?.slice(0, 6)}` : 
+                                        {isSelected ? 'Seleccionado' :
+                                         blocked && selectedMovie ? `Choca` : 
                                          existingShow ? existingShow.movie_title?.slice(0, 8) : 'Libre'}
                                       </div>
-                                    </div>
+                                    </button>
                                   )
                                 })}
                               </div>
@@ -1322,26 +1330,16 @@ export default function AdminPage() {
                       </div>
                     )}
 
-                    <Select value={newShowtime.show_time} onValueChange={(v) => setNewShowtime({...newShowtime, show_time: v})}>
-                      <SelectTrigger className="border-border bg-input">
-                        <SelectValue placeholder="Selecciona una hora" />
-                      </SelectTrigger>
-                      <SelectContent className="border-border bg-card">
-                        {timeOptions.map((t) => {
-                          const dayShowtimes = newShowtime.show_date && newShowtime.room_id ? getShowtimesForDay(newShowtime.show_date) : []
-                          const selectedMovie = movies.find(m => m.id === newShowtime.movie_id)
-                          const selectedDuration = selectedMovie?.duration || 120
-                          const [h] = t.value.split(':').map(Number)
-                          const { blocked, conflictingMovie } = checkTimeSlotBlocked(h, selectedDuration, dayShowtimes)
-                          
-                          return (
-                            <SelectItem key={t.value} value={t.value} disabled={blocked}>
-                              {t.label} {blocked ? `- No cabe (choca con ${conflictingMovie?.slice(0, 10)})` : ''}
-                            </SelectItem>
-                          )
-                        })}
-                      </SelectContent>
-                    </Select>
+                    <div className={`border rounded-lg p-3 text-center ${newShowtime.show_time ? 'bg-primary/10 border-primary/30' : 'bg-muted/30 border-border'}`}>
+                      {newShowtime.show_time ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Clock className="h-4 w-4 text-primary" />
+                          <span className="font-semibold text-primary">{newShowtime.show_time}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">Selecciona un horario disponible</span>
+                      )}
+                    </div>
 
                     <Input 
                       type="number" 
