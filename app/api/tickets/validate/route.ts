@@ -6,14 +6,10 @@ export async function POST(request: Request) {
     const body = await request.json()
     let { ticket_code } = body
     
-    console.log('[VALIDATE] Input code:', ticket_code)
-    
     ticket_code = ticket_code.trim().toUpperCase()
     if (ticket_code.startsWith('TKT-')) {
       ticket_code = ticket_code.substring(4)
     }
-    
-    console.log('[VALIDATE] Cleaned code:', ticket_code)
     
     let searchCode = 'TKT-' + ticket_code
     
@@ -22,10 +18,8 @@ export async function POST(request: Request) {
         t.*, 
         m.title as movie_title, 
         s.start_time,
-        s.end_time,
         r.name as room_name,
         u.name as customer_name,
-        u.email as customer_email,
         (SELECT string_agg(st.row || st.number, ', ') FROM ticket_seats ts JOIN seats st ON ts.seat_id = st.id WHERE ts.ticket_id = t.id) as seats_list
       FROM tickets t
       JOIN showtimes s ON t.showtime_id = s.id
@@ -44,32 +38,17 @@ export async function POST(request: Request) {
     
     const ticket = tickets[0]
     
-    const startDate = new Date(ticket.start_time)
-    const endDate = new Date(ticket.end_time)
-    
-    const formattedTicket = {
-      ...ticket,
-      show_date: startDate.toLocaleDateString('es-CO'),
-      show_time: startDate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false }),
-      end_time_display: endDate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false }),
-      seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
-      seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
-    }
-    
     if (ticket.status === 'used') {
       return NextResponse.json({
         valid: false,
-        error: 'Este tiquete ya fue utilizado',
-        ticket: formattedTicket,
-        validated_at: ticket.validated_at
+        error: 'Este tiquete ya fue utilizado'
       })
     }
     
     if (ticket.status === 'cancelled') {
       return NextResponse.json({
         valid: false,
-        error: 'Este tiquete ha sido cancelado',
-        ticket: formattedTicket
+        error: 'Este tiquete ha sido cancelado'
       })
     }
     
@@ -81,8 +60,7 @@ export async function POST(request: Request) {
     
     return NextResponse.json({
       valid: true,
-      message: 'Tiquete validado exitosamente',
-      ticket: { ...formattedTicket, status: 'used' }
+      message: 'Tiquete validado exitosamente'
     })
   } catch (error) {
     console.error('Error validating ticket:', error)
