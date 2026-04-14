@@ -78,9 +78,9 @@ export async function POST(request: Request) {
       
       if (now < tenMinutesBefore!) {
         const waitMinutes = Math.ceil((tenMinutesBefore!.getTime() - now.getTime()) / 60000)
-        timeError = `Es muy pronto para validar. La función inicia a las ${ticket.start_time ? String(ticket.start_time).split(' ')[1]?.slice(0, 5) : startTime.toTimeString().slice(0, 5)}. Debes esperar ${waitMinutes} minuto(s).`
+        timeError = `Es muy pronto para validar. La función inicia a las ${startTime ? startTime.toTimeString().slice(0, 5) : 'N/A'}. Debes esperar ${waitMinutes} minuto(s).`
       } else {
-        timeError = `La función ya terminó. Esta función terminó a las ${ticket.end_time ? String(ticket.end_time).split(' ')[1]?.slice(0, 5) : endTime.toTimeString().slice(0, 5)}.`
+        timeError = `La función ya terminó. Esta función terminó a las ${endTime ? endTime.toTimeString().slice(0, 5) : 'N/A'}.`
       }
       
         return NextResponse.json({
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         ticket: {
           ...ticket,
           show_date: showtimeDate,
-          show_time: ticket.start_time ? String(ticket.start_time).split(' ')[1]?.slice(0, 5) : null,
+          show_time: startTime ? startTime.toTimeString().slice(0, 5) : null,
           seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
           seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
         }
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
     const formattedTicket = {
       ...ticket,
       show_date: showtimeDate,
-      show_time: ticket.start_time ? String(ticket.start_time).split(' ')[1]?.slice(0, 5) : null,
+      show_time: startTime ? startTime.toTimeString().slice(0, 5) : null,
       seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
       seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
     }
