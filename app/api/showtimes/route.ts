@@ -1,29 +1,13 @@
 import { sql } from '@/lib/db'
 import { NextResponse } from 'next/server'
-
-function formatDateLocal(dt: Date) {
-  const year = dt.getFullYear()
-  const month = String(dt.getMonth() + 1).padStart(2, '0')
-  const day = String(dt.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function formatTimeLocal(dt: Date) {
-  const h = String(dt.getHours()).padStart(2, '0')
-  const m = String(dt.getMinutes()).padStart(2, '0')
-  return `${h}:${m}`
-}
-
-function timeToMinutes(hora: string): number {
-  const [h, m] = hora.split(':').map(Number)
-  return h * 60 + m
-}
-
-function minutesToTime(minutos: number): string {
-  const h = Math.floor(minutos / 60)
-  const m = minutos % 60
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-}
+import { 
+  TIMEZONE,
+  OPERATING_START_HOUR, 
+  OPERATING_END_HOUR, 
+  CLEANING_MARGIN_MINUTES,
+  timeToMinutes, 
+  minutesToTime 
+} from '@/lib/timezone'
 
 export async function GET(request: Request) {
   try {
@@ -34,9 +18,9 @@ export async function GET(request: Request) {
     if (movieId) {
       showtimes = await sql`
         SELECT s.id, s.movie_id, s.room_id, s.price, s.created_at,
-               TO_CHAR(s.start_time AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') as show_date,
-               TO_CHAR(s.start_time AT TIME ZONE 'America/Bogota', 'HH24:MI') as show_time,
-               TO_CHAR(s.end_time AT TIME ZONE 'America/Bogota', 'HH24:MI') as end_time_display,
+               TO_CHAR(s.start_time AT TIME ZONE '${TIMEZONE}', 'YYYY-MM-DD') as show_date,
+               TO_CHAR(s.start_time AT TIME ZONE '${TIMEZONE}', 'HH24:MI') as show_time,
+               TO_CHAR(s.end_time AT TIME ZONE '${TIMEZONE}', 'HH24:MI') as end_time_display,
                m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity,
         COALESCE((
           SELECT COUNT(*) 
@@ -52,9 +36,9 @@ export async function GET(request: Request) {
     } else {
       showtimes = await sql`
         SELECT s.id, s.movie_id, s.room_id, s.price, s.created_at,
-               TO_CHAR(s.start_time AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') as show_date,
-               TO_CHAR(s.start_time AT TIME ZONE 'America/Bogota', 'HH24:MI') as show_time,
-               TO_CHAR(s.end_time AT TIME ZONE 'America/Bogota', 'HH24:MI') as end_time_display,
+               TO_CHAR(s.start_time AT TIME ZONE '${TIMEZONE}', 'YYYY-MM-DD') as show_date,
+               TO_CHAR(s.start_time AT TIME ZONE '${TIMEZONE}', 'HH24:MI') as show_time,
+               TO_CHAR(s.end_time AT TIME ZONE '${TIMEZONE}', 'HH24:MI') as end_time_display,
                m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity,
         COALESCE((
           SELECT COUNT(*) 
@@ -102,10 +86,10 @@ export async function POST(request: Request) {
     const movie = movieResult[0]
     const durationMinutes = movie.duration || 120
 
-    // Validar horario de operación (10:00 - 23:00)
-    const HORA_APERTURA = timeToMinutes('10:00')
-    const HORA_CIERRE = timeToMinutes('23:00')
-    const MARGEN_LIMPIEZA = 15
+    // Validar horario de operación (10:00 - 23:00) São Paulo timezone
+    const HORA_APERTURA = OPERATING_START_HOUR * 60
+    const HORA_CIERRE = OPERATING_END_HOUR * 60
+    const MARGEN_LIMPIEZA = CLEANING_MARGIN_MINUTES
     
     const nuevaInicio = timeToMinutes(show_time)
     const nuevaFin = nuevaInicio + durationMinutes + MARGEN_LIMPIEZA
@@ -127,13 +111,13 @@ export async function POST(request: Request) {
       SELECT s.id, 
              m.title as movie_title, 
              r.name as room_name,
-             EXTRACT(HOUR FROM s.start_time AT TIME ZONE 'America/Bogota') * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE 'America/Bogota') as existe_inicio,
-             EXTRACT(HOUR FROM s.end_time AT TIME ZONE 'America/Bogota') * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE 'America/Bogota') as existe_fin
+              EXTRACT(HOUR FROM s.start_time AT TIME ZONE '${TIMEZONE}') * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE '${TIMEZONE}') as existe_inicio,
+              EXTRACT(HOUR FROM s.end_time AT TIME ZONE '${TIMEZONE}') * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE '${TIMEZONE}') as existe_fin
       FROM showtimes s
       JOIN movies m ON s.movie_id = m.id
       JOIN rooms r ON s.room_id = r.id
       WHERE s.room_id::text = ${room_id}
-        AND DATE(s.start_time AT TIME ZONE 'America/Bogota') = ${show_date}::date
+        AND DATE(s.start_time AT TIME ZONE '${TIMEZONE}') = ${show_date}::date
     `
 
     for (const func of conflictCheck) {
@@ -177,14 +161,14 @@ export async function POST(request: Request) {
       SELECT s.id, 
              m.title as movie_title, 
              r.name as room_name,
-             EXTRACT(HOUR FROM s.start_time AT TIME ZONE 'America/Bogota') * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE 'America/Bogota') as existe_inicio,
-             EXTRACT(HOUR FROM s.end_time AT TIME ZONE 'America/Bogota') * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE 'America/Bogota') as existe_fin
+              EXTRACT(HOUR FROM s.start_time AT TIME ZONE '${TIMEZONE}') * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE '${TIMEZONE}') as existe_inicio,
+              EXTRACT(HOUR FROM s.end_time AT TIME ZONE '${TIMEZONE}') * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE '${TIMEZONE}') as existe_fin
       FROM showtimes s
       JOIN movies m ON s.movie_id = m.id
       JOIN rooms r ON s.room_id = r.id
       WHERE s.movie_id::text = ${movie_id}
         AND s.room_id::text = ${room_id}
-        AND DATE(s.start_time AT TIME ZONE 'America/Bogota') = ${show_date}::date
+        AND DATE(s.start_time AT TIME ZONE '${TIMEZONE}') = ${show_date}::date
     `
 
     for (const func of movieConflictCheck) {
@@ -207,11 +191,11 @@ export async function POST(request: Request) {
       VALUES (
         ${movie_id}::uuid, 
         ${room_id}::uuid, 
-        ${startDateTime}::timestamp at time zone 'America/Bogota', 
-        ${endDateTime}::timestamp at time zone 'America/Bogota', 
+        ${startDateTime}::timestamp at time zone '${TIMEZONE}', 
+        ${endDateTime}::timestamp at time zone '${TIMEZONE}', 
         ${price}
       )
-      RETURNING id, movie_id, room_id, start_time AT TIME ZONE 'America/Bogota' as start_time_local, end_time AT TIME ZONE 'America/Bogota' as end_time_local, price, created_at
+      RETURNING id, movie_id, room_id, start_time AT TIME ZONE '${TIMEZONE}' as start_time_local, end_time AT TIME ZONE '${TIMEZONE}' as end_time_local, price, created_at
     `
 
     const showtimeId = result[0].id

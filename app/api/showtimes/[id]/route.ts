@@ -1,10 +1,13 @@
 import { sql } from '@/lib/db'
 import { NextResponse } from 'next/server'
-
-function timeToMinutes(hora: string): number {
-  const [h, m] = hora.split(':').map(Number)
-  return h * 60 + m
-}
+import { 
+  TIMEZONE,
+  OPERATING_START_HOUR, 
+  OPERATING_END_HOUR, 
+  CLEANING_MARGIN_MINUTES,
+  timeToMinutes, 
+  minutesToTime 
+} from '@/lib/timezone'
 
 function minutesToTime(minutos: number): string {
   const h = Math.floor(minutos / 60)
@@ -97,10 +100,10 @@ export async function PUT(
     const roomIdText = showtime.room_id.toString()
     const durationMinutes = showtime.movie_duration || 120
 
-    // Validar horario de operación (10:00 - 23:00)
-    const HORA_APERTURA = timeToMinutes('10:00')
-    const HORA_CIERRE = timeToMinutes('23:00')
-    const MARGEN_LIMPIEZA = 15
+    // Validar horario de operación (10:00 - 23:00) São Paulo timezone
+    const HORA_APERTURA = OPERATING_START_HOUR * 60
+    const HORA_CIERRE = OPERATING_END_HOUR * 60
+    const MARGEN_LIMPIEZA = CLEANING_MARGIN_MINUTES
 
     const nuevaInicio = timeToMinutes(show_time)
     const nuevaFin = nuevaInicio + durationMinutes + MARGEN_LIMPIEZA
@@ -122,14 +125,14 @@ export async function PUT(
 
     const conflictCheck = await sql`
       SELECT s.id, m.title as movie_title, r.name as room_name,
-             EXTRACT(HOUR FROM s.start_time AT TIME ZONE 'America/Bogota') * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE 'America/Bogota') as existe_inicio,
-             EXTRACT(HOUR FROM s.end_time AT TIME ZONE 'America/Bogota') * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE 'America/Bogota') as existe_fin
+              EXTRACT(HOUR FROM s.start_time AT TIME ZONE '${TIMEZONE}') * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE '${TIMEZONE}') as existe_inicio,
+              EXTRACT(HOUR FROM s.end_time AT TIME ZONE '${TIMEZONE}') * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE '${TIMEZONE}') as existe_fin
       FROM showtimes s
       JOIN movies m ON s.movie_id = m.id
       JOIN rooms r ON s.room_id = r.id
       WHERE s.room_id::text = ${roomIdText}
         AND s.id != ${id}
-        AND DATE(s.start_time AT TIME ZONE 'America/Bogota') = ${show_date}::date
+        AND DATE(s.start_time AT TIME ZONE '${TIMEZONE}') = ${show_date}::date
     `
 
     for (const func of conflictCheck) {
@@ -174,8 +177,8 @@ export async function PUT(
 
     const result = await sql`
       UPDATE showtimes 
-      SET start_time = ${startDateTime}::timestamp at time zone 'America/Bogota', 
-          end_time = ${endDateTime}::timestamp at time zone 'America/Bogota',
+      SET start_time = ${startDateTime}::timestamp at time zone '${TIMEZONE}', 
+          end_time = ${endDateTime}::timestamp at time zone '${TIMEZONE}',
           price = ${price}
       WHERE id = ${id}
       RETURNING id, start_time, end_time, price
