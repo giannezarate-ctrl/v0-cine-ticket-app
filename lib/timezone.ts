@@ -1,4 +1,4 @@
-export const TIMEZONE = 'America/Sao_Paulo'
+export const TIMEZONE = 'America/Bogota'
 
 export const OPERATING_START_HOUR = 10
 export const OPERATING_END_HOUR = 23
