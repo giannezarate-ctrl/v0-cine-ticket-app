@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     const startTime = ticket.start_time ? new Date(ticket.start_time) : null
     const endTime = ticket.end_time ? new Date(ticket.end_time) : null
     
-    const showtimeDate = ticket.start_time ? String(ticket.start_time).split(' ')[0] : null
+    const showtimeDate = ticket.start_time ? String(ticket.start_time).split('T')[0] : null
     const todayDate = now.toISOString().split('T')[0]
     
     if (showtimeDate !== todayDate) {
