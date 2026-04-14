@@ -78,9 +78,9 @@ export async function POST(request: Request) {
       
       if (now < tenMinutesBefore!) {
         const waitMinutes = Math.ceil((tenMinutesBefore!.getTime() - now.getTime()) / 60000)
-        timeError = `Es muy pronto para validar. La función inicia a las ${startTime.toTimeString().slice(0, 5)}. Debes esperar ${waitMinutes} minuto(s).`
+        timeError = `Es muy pronto para validar. La función inicia a las ${ticket.start_time ? String(ticket.start_time).split(' ')[1]?.slice(0, 5) : startTime.toTimeString().slice(0, 5)}. Debes esperar ${waitMinutes} minuto(s).`
       } else {
-        timeError = `La función ya terminó. Esta función terminó a las ${endTime.toTimeString().slice(0, 5)}.`
+        timeError = `La función ya terminó. Esta función terminó a las ${ticket.end_time ? String(ticket.end_time).split(' ')[1]?.slice(0, 5) : endTime.toTimeString().slice(0, 5)}.`
       }
       
         return NextResponse.json({
