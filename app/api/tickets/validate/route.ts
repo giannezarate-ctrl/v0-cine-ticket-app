@@ -49,8 +49,8 @@ export async function POST(request: Request) {
     const startTime = ticket.start_time ? new Date(ticket.start_time) : null
     const endTime = ticket.end_time ? new Date(ticket.end_time) : null
     
-    const showtimeDate = startTime ? startTime.toISOString().split('T')[0] : null
-    const todayDate = now.toISOString().split('T')[0]
+    const showtimeDate = startTime ? startTime.toLocaleDateString('en-CA') : null
+    const todayDate = now.toLocaleDateString('en-CA')
     
     if (showtimeDate !== todayDate) {
       const isPast = showtimeDate < todayDate
