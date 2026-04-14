@@ -17,9 +17,9 @@ export async function GET(request: Request) {
     if (movieId) {
       const showtimes = await sql`
         SELECT s.id, s.movie_id, s.room_id, s.price, s.created_at,
-               TO_CHAR(s.start_time AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') as show_date,
-               TO_CHAR(s.start_time AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI') as show_time,
-               TO_CHAR(s.end_time AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI') as end_time_display,
+               TO_CHAR(s.start_time AT TIME ZONE ${TIMEZONE}, 'YYYY-MM-DD') as show_date,
+               TO_CHAR(s.start_time AT TIME ZONE ${TIMEZONE}, 'HH24:MI') as show_time,
+               TO_CHAR(s.end_time AT TIME ZONE ${TIMEZONE}, 'HH24:MI') as end_time_display,
                m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity,
                COALESCE((
                  SELECT COUNT(*) 
@@ -42,9 +42,9 @@ export async function GET(request: Request) {
     } else {
       const showtimes = await sql`
         SELECT s.id, s.movie_id, s.room_id, s.price, s.created_at,
-               TO_CHAR(s.start_time AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') as show_date,
-               TO_CHAR(s.start_time AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI') as show_time,
-               TO_CHAR(s.end_time AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI') as end_time_display,
+               TO_CHAR(s.start_time AT TIME ZONE ${TIMEZONE}, 'YYYY-MM-DD') as show_date,
+               TO_CHAR(s.start_time AT TIME ZONE ${TIMEZONE}, 'HH24:MI') as show_time,
+               TO_CHAR(s.end_time AT TIME ZONE ${TIMEZONE}, 'HH24:MI') as end_time_display,
                m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity,
                COALESCE((
                  SELECT COUNT(*) 
@@ -115,13 +115,13 @@ export async function POST(request: Request) {
       SELECT s.id, 
              m.title as movie_title, 
              r.name as room_name,
-             EXTRACT(HOUR FROM s.start_time AT TIME ZONE 'America/Sao_Paulo') * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE 'America/Sao_Paulo') as existe_inicio,
-             EXTRACT(HOUR FROM s.end_time AT TIME ZONE 'America/Sao_Paulo') * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE 'America/Sao_Paulo') as existe_fin
+             EXTRACT(HOUR FROM s.start_time AT TIME ZONE ${TIMEZONE}) * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE ${TIMEZONE}) as existe_inicio,
+             EXTRACT(HOUR FROM s.end_time AT TIME ZONE ${TIMEZONE}) * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE ${TIMEZONE}) as existe_fin
       FROM showtimes s
       JOIN movies m ON s.movie_id = m.id
       JOIN rooms r ON s.room_id = r.id
       WHERE s.room_id::text = ${room_id}
-        AND DATE(s.start_time AT TIME ZONE 'America/Sao_Paulo') = ${show_date}::date
+        AND DATE(s.start_time AT TIME ZONE ${TIMEZONE}) = ${show_date}::date
     `
 
     for (const func of conflictCheck) {
@@ -159,14 +159,14 @@ export async function POST(request: Request) {
       SELECT s.id, 
              m.title as movie_title, 
              r.name as room_name,
-             EXTRACT(HOUR FROM s.start_time AT TIME ZONE 'America/Sao_Paulo') * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE 'America/Sao_Paulo') as existe_inicio,
-             EXTRACT(HOUR FROM s.end_time AT TIME ZONE 'America/Sao_Paulo') * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE 'America/Sao_Paulo') as existe_fin
+             EXTRACT(HOUR FROM s.start_time AT TIME ZONE ${TIMEZONE}) * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE ${TIMEZONE}) as existe_inicio,
+             EXTRACT(HOUR FROM s.end_time AT TIME ZONE ${TIMEZONE}) * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE ${TIMEZONE}) as existe_fin
       FROM showtimes s
       JOIN movies m ON s.movie_id = m.id
       JOIN rooms r ON s.room_id = r.id
       WHERE s.movie_id::text = ${movie_id}
         AND s.room_id::text = ${room_id}
-        AND DATE(s.start_time AT TIME ZONE 'America/Sao_Paulo') = ${show_date}::date
+        AND DATE(s.start_time AT TIME ZONE ${TIMEZONE}) = ${show_date}::date
     `
 
     for (const func of movieConflictCheck) {
