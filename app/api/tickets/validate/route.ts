@@ -1,14 +1,6 @@
 import { sql } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
-function getTimeMinutes(date: Date): number {
-  return date.getHours() * 60 + date.getMinutes()
-}
-
-function formatTime(date: Date): string {
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-}
-
 export async function POST(request: Request) {
   try {
     const body = await request.json()
@@ -55,55 +47,11 @@ export async function POST(request: Request) {
     const startDate = new Date(ticket.start_time)
     const endDate = new Date(ticket.end_time)
     
-    console.log('[VALIDATE] start_date:', startDate.toString())
-    console.log('[VALIDATE] end_date:', endDate.toString())
-    
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-      console.error('[VALIDATE] Invalid date:', ticket.start_time, ticket.end_time)
-      return NextResponse.json(
-        { valid: false, error: 'Error al procesar horarios de la función' },
-        { status: 500 }
-      )
-    }
-    
-    const now = new Date()
-    const nowMinutes = getTimeMinutes(now)
-    const startMinutes = getTimeMinutes(startDate)
-    const endMinutes = getTimeMinutes(endDate)
-    const tenMinutesBefore = startMinutes - 10
-    
-    console.log('[VALIDATE] nowMinutes:', nowMinutes)
-    console.log('[VALIDATE] startMinutes:', startMinutes, 'endMinutes:', endMinutes)
-    
-    const canValidate = nowMinutes >= tenMinutesBefore && nowMinutes <= endMinutes
-    
-    if (!canValidate) {
-      let timeError = ''
-      
-      if (nowMinutes < tenMinutesBefore) {
-        const waitMinutes = tenMinutesBefore - nowMinutes
-        timeError = `Es muy pronto para validar. La función inicia a las ${formatTime(startDate)}. Debes esperar ${waitMinutes} minuto(s).`
-      } else {
-        timeError = `La función ya terminó. Esta función terminó a las ${formatTime(endDate)}.`
-      }
-      
-      return NextResponse.json({
-        valid: false,
-        error: timeError,
-        ticket: {
-          ...ticket,
-          show_date: startDate.toISOString().split('T')[0],
-          show_time: formatTime(startDate),
-          seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
-          seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
-        }
-      }, { status: 400 })
-    }
-    
     const formattedTicket = {
       ...ticket,
-      show_date: startDate.toISOString().split('T')[0],
-      show_time: formatTime(startDate),
+      show_date: startDate.toLocaleDateString('es-CO'),
+      show_time: startDate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      end_time_display: endDate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false }),
       seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
       seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
     }
