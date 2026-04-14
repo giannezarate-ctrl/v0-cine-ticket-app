@@ -53,7 +53,8 @@ import {
   LogIn,
   AlertCircle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Clock
 } from 'lucide-react'
 
 interface Stats {

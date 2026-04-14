@@ -67,7 +67,7 @@ export async function GET(request: Request) {
 
   } catch (error) {
     console.error('ERROR SHOWTIMES:', error)
-    return NextResponse.json([], { status: 200 })
+    return NextResponse.json({ error: 'Error fetching showtimes', details: String(error) }, { status: 500 })
   }
 }
 
