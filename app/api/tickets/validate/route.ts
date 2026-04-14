@@ -1,5 +1,4 @@
 import { sql } from '@/lib/db'
-import { toLocalTimeString, getLocalNow, parseLocalTime, timeToMinutes, minutesToTime } from '@/lib/dateUtils'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
@@ -45,29 +44,26 @@ export async function POST(request: Request) {
     
     const ticket = tickets[0]
     
-    const startTimeDate = new Date(ticket.start_time)
-    const endTimeDate = new Date(ticket.end_time)
+    const now = new Date()
+    const nowMinutes = now.getHours() * 60 + now.getMinutes()
     
-    const startTimeStr = toLocalTimeString(startTimeDate)
-    const endTimeStr = toLocalTimeString(endTimeDate)
+    const startTimeRaw = String(ticket.start_time)
+    const endTimeRaw = String(ticket.end_time)
     
-    const startParsed = parseLocalTime(startTimeStr)
-    const endParsed = parseLocalTime(endTimeStr)
+    const startTimePart = startTimeRaw.split(' ')[1]?.slice(0, 5) || startTimeRaw.slice(11, 16)
+    const endTimePart = endTimeRaw.split(' ')[1]?.slice(0, 5) || endTimeRaw.slice(11, 16)
     
-    if (!startParsed || !endParsed) {
-      return NextResponse.json(
-        { valid: false, error: 'Error al procesar horarios de la función' },
-        { status: 500 }
-      )
-    }
+    console.log('[VALIDATE] startTimeRaw:', startTimeRaw, 'startTimePart:', startTimePart)
+    console.log('[VALIDATE] endTimeRaw:', endTimeRaw, 'endTimePart:', endTimePart)
+    console.log('[VALIDATE] nowMinutes:', nowMinutes)
     
-    const now = getLocalNow()
-    const nowMinutes = timeToMinutes(now.getHours(), now.getMinutes())
-    const startMinutes = timeToMinutes(startParsed.hours, startParsed.minutes)
-    const endMinutes = timeToMinutes(endParsed.hours, endParsed.minutes)
+    const [startHour, startMin] = startTimePart.split(':').map(Number)
+    const [endHour, endMin] = endTimePart.split(':').map(Number)
+    const startMinutes = startHour * 60 + startMin
+    const endMinutes = endHour * 60 + endMin
     const tenMinutesBefore = startMinutes - 10
     
-    console.log('[VALIDATE] Now:', nowMinutes, 'Start:', startMinutes, 'End:', endMinutes, 'TenBefore:', tenMinutesBefore)
+    console.log('[VALIDATE] startMinutes:', startMinutes, 'endMinutes:', endMinutes, 'tenMinutesBefore:', tenMinutesBefore)
     
     const canValidate = nowMinutes >= tenMinutesBefore && nowMinutes <= endMinutes
     
@@ -76,9 +72,9 @@ export async function POST(request: Request) {
       
       if (nowMinutes < tenMinutesBefore) {
         const waitMinutes = tenMinutesBefore - nowMinutes
-        timeError = `Es muy pronto para validar. La función inicia a las ${startTimeStr}. Debes esperar ${waitMinutes} minuto(s).`
+        timeError = `Es muy pronto para validar. La función inicia a las ${startTimePart}. Debes esperar ${waitMinutes} minuto(s).`
       } else {
-        timeError = `La función ya terminó. Esta función terminó a las ${endTimeStr}.`
+        timeError = `La función ya terminó. Esta función terminó a las ${endTimePart}.`
       }
       
       return NextResponse.json({
@@ -86,8 +82,8 @@ export async function POST(request: Request) {
         error: timeError,
         ticket: {
           ...ticket,
-          show_date: startTimeDate.toISOString().split('T')[0],
-          show_time: startTimeStr,
+          show_date: startTimeRaw.split(' ')[0],
+          show_time: startTimePart,
           seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
           seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
         }
@@ -96,8 +92,8 @@ export async function POST(request: Request) {
     
     const formattedTicket = {
       ...ticket,
-      show_date: startTimeDate.toISOString().split('T')[0],
-      show_time: startTimeStr,
+      show_date: startTimeRaw.split(' ')[0],
+      show_time: startTimePart,
       seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
       seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
     }
