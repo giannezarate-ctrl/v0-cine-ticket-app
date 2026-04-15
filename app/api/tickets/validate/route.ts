@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     const startTime = ticket.start_time ? new Date(ticket.start_time) : null
     const endTime = ticket.end_time ? new Date(ticket.end_time) : null
     
-    const showtimeDate = startTime ? startTime.toISOString().split('T')[0] : null
+    const showtimeDate = ticket.start_time ? String(ticket.start_time).split(' ')[0] : null
     const todayDate = now.toISOString().split('T')[0]
     
     if (showtimeDate !== todayDate) {
@@ -83,13 +83,13 @@ export async function POST(request: Request) {
         timeError = `La función ya terminó. Esta función terminó a las ${endTime.toTimeString().slice(0, 5)}.`
       }
       
-      return NextResponse.json({
+        return NextResponse.json({
         valid: false,
         error: timeError,
         ticket: {
           ...ticket,
           show_date: showtimeDate,
-          show_time: startTime ? startTime.toTimeString().slice(0, 5) : null,
+          show_time: ticket.start_time ? String(ticket.start_time).split(' ')[1]?.slice(0, 5) : null,
           seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
           seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
         }
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
     const formattedTicket = {
       ...ticket,
       show_date: showtimeDate,
-      show_time: startTime ? startTime.toTimeString().slice(0, 5) : null,
+      show_time: ticket.start_time ? String(ticket.start_time).split(' ')[1]?.slice(0, 5) : null,
       seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
       seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
     }
