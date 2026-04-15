@@ -46,8 +46,28 @@ export async function POST(request: Request) {
     
     const now = new Date()
     
-    const startTime = ticket.start_time ? new Date(ticket.start_time + ' UTC') : null
-    const endTime = ticket.end_time ? new Date(ticket.end_time + ' UTC') : null
+    const startTime = ticket.start_time ? new Date(ticket.start_time) : null
+    const endTime = ticket.end_time ? new Date(ticket.end_time) : null
+    
+    const showtimeDate = startTime ? startTime.toISOString().split('T')[0] : null
+    const todayDate = now.toISOString().split('T')[0]
+    
+    if (showtimeDate !== todayDate) {
+      const isPast = showtimeDate < todayDate
+      return NextResponse.json({
+        valid: false,
+        error: isPast 
+          ? `Esta función fue el ${showtimeDate}. Ya no es válida.`
+          : `Esta función está programada para el ${showtimeDate}. Aún no puedes validar este tiquete.`,
+        ticket: {
+          ...ticket,
+          show_date: showtimeDate,
+          show_time: startTime ? startTime.toTimeString().slice(0, 5) : null,
+          seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
+          seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
+        }
+      }, { status: 400 })
+    }
     
     const tenMinutesBefore = startTime ? new Date(startTime.getTime() - 10 * 60 * 1000) : null
     
@@ -68,7 +88,7 @@ export async function POST(request: Request) {
         error: timeError,
         ticket: {
           ...ticket,
-          show_date: startTime ? startTime.toISOString().split('T')[0] : null,
+          show_date: showtimeDate,
           show_time: startTime ? startTime.toTimeString().slice(0, 5) : null,
           seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
           seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
@@ -76,11 +96,10 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
     
-    const dt = startTime
     const formattedTicket = {
       ...ticket,
-      show_date: dt ? dt.toISOString().split('T')[0] : null,
-      show_time: dt ? dt.toTimeString().slice(0, 5) : null,
+      show_date: showtimeDate,
+      show_time: startTime ? startTime.toTimeString().slice(0, 5) : null,
       seat_row: ticket.seats_list ? ticket.seats_list.split(', ')[0].charAt(0) : null,
       seat_number: ticket.seats_list ? parseInt(ticket.seats_list.split(', ')[0].substring(1)) : null,
     }
