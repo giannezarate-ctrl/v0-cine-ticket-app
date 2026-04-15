@@ -115,9 +115,7 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
 
-    const [year, month, day] = show_date.split('-').map(Number)
-    const nextDay = new Date(year, month - 1, day + 1)
-    const actualDate = `${nextDay.getFullYear()}-${String(nextDay.getMonth() + 1).padStart(2, '0')}-${String(nextDay.getDate()).padStart(2, '0')}`
+    const actualDate = show_date
     
     const conflictCheck = await sql`
       SELECT s.id, 
