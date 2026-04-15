@@ -1,15 +1,8 @@
-import { sql } from '@/lib/db'
+import { sql, setTimezone } from '@/lib/db'
 import { NextResponse } from 'next/server'
-import { 
-  TIMEZONE,
-  OPERATING_START_HOUR, 
-  OPERATING_END_HOUR, 
-  CLEANING_MARGIN_MINUTES,
-  timeToMinutes, 
-  minutesToTime 
-} from '@/lib/timezone'
 
 export async function GET(request: Request) {
+  await setTimezone()
   try {
     const { searchParams } = new URL(request.url)
     const movieId = searchParams.get('movieId')
@@ -17,9 +10,9 @@ export async function GET(request: Request) {
     if (movieId) {
       const showtimes = await sql`
         SELECT s.id, s.movie_id, s.room_id, s.price, s.created_at,
-               TO_CHAR(s.start_time AT TIME ZONE ${TIMEZONE}, 'YYYY-MM-DD') as show_date,
-               TO_CHAR(s.start_time AT TIME ZONE ${TIMEZONE}, 'HH24:MI') as show_time,
-               TO_CHAR(s.end_time AT TIME ZONE ${TIMEZONE}, 'HH24:MI') as end_time_display,
+               to_char(s.start_time + interval '1 day', 'YYYY-MM-DD') as show_date,
+               to_char(s.start_time, 'HH24:MI') as show_time,
+               to_char(s.end_time, 'HH24:MI') as end_time_display,
                m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity,
                COALESCE((
                  SELECT COUNT(*) 
@@ -42,9 +35,9 @@ export async function GET(request: Request) {
     } else {
       const showtimes = await sql`
         SELECT s.id, s.movie_id, s.room_id, s.price, s.created_at,
-               TO_CHAR(s.start_time AT TIME ZONE ${TIMEZONE}, 'YYYY-MM-DD') as show_date,
-               TO_CHAR(s.start_time AT TIME ZONE ${TIMEZONE}, 'HH24:MI') as show_time,
-               TO_CHAR(s.end_time AT TIME ZONE ${TIMEZONE}, 'HH24:MI') as end_time_display,
+               to_char(s.start_time + interval '1 day', 'YYYY-MM-DD') as show_date,
+               to_char(s.start_time, 'HH24:MI') as show_time,
+               to_char(s.end_time, 'HH24:MI') as end_time_display,
                m.title as movie_title, m.poster_url as movie_poster, r.name as room_name, r.capacity,
                COALESCE((
                  SELECT COUNT(*) 
@@ -71,8 +64,20 @@ export async function GET(request: Request) {
   }
 }
 
+function timeToMinutes(timeStr: string): number {
+  const [h, m] = timeStr.split(':').map(Number)
+  return h * 60 + m
+}
+
+function minutesToTime(minutes: number): string {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
 export async function POST(request: Request) {
   try {
+    await setTimezone()
     const body = await request.json()
     const { movie_id, room_id, show_date, show_time, price } = body
 
@@ -90,38 +95,41 @@ export async function POST(request: Request) {
 
     const movie = movieResult[0]
     const durationMinutes = movie.duration || 120
+    const MARGEN_LIMPIEZA = 15
 
-    const HORA_APERTURA = OPERATING_START_HOUR * 60
-    const HORA_CIERRE = OPERATING_END_HOUR * 60
-    const MARGEN_LIMPIEZA = CLEANING_MARGIN_MINUTES
+    const HORA_APERTURA = 10 * 60
+    const HORA_CIERRE = 23 * 60
     
     const nuevaInicio = timeToMinutes(show_time)
     const nuevaFin = nuevaInicio + durationMinutes + MARGEN_LIMPIEZA
     
     if (nuevaInicio < HORA_APERTURA) {
       return NextResponse.json({ 
-        error: `Fuera de horario. El cine abre a las 10:00. Intentaste programar a las ${show_time}.` 
+        error: `Fuera de horario. El cine abre a las 10:00.` 
       }, { status: 400 })
     }
     
     if (nuevaFin > HORA_CIERRE) {
-      const horaFinReal = minutesToTime(nuevaInicio + durationMinutes)
       return NextResponse.json({ 
-        error: `Fuera de horario. La función terminaría a las ${horaFinReal} (limpieza hasta ${minutesToTime(nuevaFin)}), pero el cine cierra a las 23:00.` 
+        error: `Fuera de horario. La función terminaría a las ${minutesToTime(nuevaInicio + durationMinutes)}.` 
       }, { status: 400 })
     }
 
+    const [year, month, day] = show_date.split('-').map(Number)
+    const nextDay = new Date(year, month - 1, day + 1)
+    const actualDate = `${nextDay.getFullYear()}-${String(nextDay.getMonth() + 1).padStart(2, '0')}-${String(nextDay.getDate()).padStart(2, '0')}`
+    
     const conflictCheck = await sql`
       SELECT s.id, 
              m.title as movie_title, 
              r.name as room_name,
-             EXTRACT(HOUR FROM s.start_time AT TIME ZONE ${TIMEZONE}) * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE ${TIMEZONE}) as existe_inicio,
-             EXTRACT(HOUR FROM s.end_time AT TIME ZONE ${TIMEZONE}) * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE ${TIMEZONE}) as existe_fin
+             EXTRACT(HOUR FROM s.start_time) * 60 + EXTRACT(MINUTE FROM s.start_time) as existe_inicio,
+             EXTRACT(HOUR FROM s.end_time) * 60 + EXTRACT(MINUTE FROM s.end_time) as existe_fin
       FROM showtimes s
       JOIN movies m ON s.movie_id = m.id
       JOIN rooms r ON s.room_id = r.id
       WHERE s.room_id::text = ${room_id}
-        AND DATE(s.start_time AT TIME ZONE ${TIMEZONE}) = ${show_date}::date
+        AND to_char(s.start_time, 'YYYY-MM-DD') = ${actualDate}
     `
 
     for (const func of conflictCheck) {
@@ -130,70 +138,26 @@ export async function POST(request: Request) {
       const peliculaExistente = func.movie_title
       
       if (nuevaInicio < existeFin && nuevaFin > existeInicio) {
-        let tipoConflicto = ""
-        
-        if (nuevaInicio >= existeInicio && nuevaFin <= existeFin) {
-          tipoConflicto = `tu función estaría DENTRO del horario de "${peliculaExistente}"`
-        } else if (nuevaInicio <= existeInicio && nuevaFin >= existeFin) {
-          tipoConflicto = `tu función cubriría completamente a "${peliculaExistente}"`
-        } else if (nuevaInicio < existeInicio && nuevaFin > existeInicio && nuevaFin <= existeFin) {
-          tipoConflicto = `tu función terminaría durante "${peliculaExistente}"`
-        } else if (nuevaInicio >= existeInicio && nuevaInicio < existeFin && nuevaFin > existeFin) {
-          tipoConflicto = `tu función empezaría durante "${peliculaExistente}"`
-        } else {
-          tipoConflicto = `hay solapamiento con "${peliculaExistente}"`
-        }
-        
         return NextResponse.json({ 
-          error: `❌ Conflicto de horario: ${tipoConflicto}.\n\n` +
-                 `📽️ Función existente: "${peliculaExistente}"\n` +
-                 `   Horario: ${minutesToTime(existeInicio)} - ${minutesToTime(existeFin)}\n\n` +
-                 `🎬 Tu función: "${movie.title}"\n` +
-                 `   Horario: ${show_time} - ${minutesToTime(nuevaInicio + durationMinutes)}\n` +
-                 `   (Incluye ${MARGEN_LIMPIEZA} min de limpieza: hasta ${minutesToTime(nuevaFin)})`
-        }, { status: 409 })
-      }
-    }
-
-    const movieConflictCheck = await sql`
-      SELECT s.id, 
-             m.title as movie_title, 
-             r.name as room_name,
-             EXTRACT(HOUR FROM s.start_time AT TIME ZONE ${TIMEZONE}) * 60 + EXTRACT(MINUTE FROM s.start_time AT TIME ZONE ${TIMEZONE}) as existe_inicio,
-             EXTRACT(HOUR FROM s.end_time AT TIME ZONE ${TIMEZONE}) * 60 + EXTRACT(MINUTE FROM s.end_time AT TIME ZONE ${TIMEZONE}) as existe_fin
-      FROM showtimes s
-      JOIN movies m ON s.movie_id = m.id
-      JOIN rooms r ON s.room_id = r.id
-      WHERE s.movie_id::text = ${movie_id}
-        AND s.room_id::text = ${room_id}
-        AND DATE(s.start_time AT TIME ZONE ${TIMEZONE}) = ${show_date}::date
-    `
-
-    for (const func of movieConflictCheck) {
-      const existeInicio = Number(func.existe_inicio)
-      const existeFin = Number(func.existe_fin)
-      
-      if (nuevaInicio < existeFin && nuevaFin > existeInicio) {
-        return NextResponse.json({ 
-          error: `La película "${movie.title}" ya está programada en ${func.room_name} de ${minutesToTime(existeInicio)} a ${minutesToTime(existeFin)}` 
+          error: `Conflicto con "${peliculaExistente}" de ${minutesToTime(existeInicio)} a ${minutesToTime(existeFin)}` 
         }, { status: 409 })
       }
     }
 
     const endTimeFormatted = minutesToTime(nuevaFin)
-    const startDateTime = `${show_date} ${show_time}:00`
-    const endDateTime = `${show_date} ${endTimeFormatted}:00`
+    const startDateTime = `${actualDate} ${show_time}:00`
+    const endDateTime = `${actualDate} ${endTimeFormatted}:00`
     
     const result = await sql`
       INSERT INTO showtimes (movie_id, room_id, start_time, end_time, price)
       VALUES (
         ${movie_id}::uuid, 
         ${room_id}::uuid, 
-        make_timestamptz(${startDateTime}, '${TIMEZONE}'), 
-        make_timestamptz(${endDateTime}, '${TIMEZONE}'), 
+        ${startDateTime}, 
+        ${endDateTime}, 
         ${price}
       )
-      RETURNING id, movie_id, room_id, start_time AT TIME ZONE ${TIMEZONE} as start_time_local, end_time AT TIME ZONE ${TIMEZONE} as end_time_local, price, created_at
+      RETURNING id, movie_id, room_id, start_time, end_time, price, created_at
     `
 
     const showtimeId = result[0].id
@@ -207,10 +171,13 @@ export async function POST(request: Request) {
 
     const created = result[0]
     return NextResponse.json({
-      ...created,
+      id: created.id,
+      movie_id: created.movie_id,
+      room_id: created.room_id,
       show_date: show_date,
       show_time: show_time,
-      end_time_display: endTimeFormatted
+      end_time_display: endTimeFormatted,
+      price: created.price
     }, { status: 201 })
   } catch (error) {
     console.error('Error creating showtime:', error)
